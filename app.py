@@ -4,12 +4,15 @@ import csv
 import io
 import sqlite3
 from datetime import datetime
+from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from fpdf import FPDF
 from google import genai
 from google.genai import types
+
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "cpit251-sbs-secret-key-2026")
