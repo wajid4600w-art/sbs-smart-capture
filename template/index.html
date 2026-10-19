@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Super Budgeting System (SBS) - AI Receipt Scanner, Voice-to-Text & Structured Document Extractor for CPIT 251.">
+    <meta name="keywords" content="Budgeting, OCR Receipt Scanner, Voice to Text, KAU, CPIT 251, Structured Text to PDF">
+    <title>SBS Smart Capture | AI Receipt & Voice Extractor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="/">🧾 SBS Smart Capture Hub</a>
+        <div class="d-flex align-items-center gap-2">
+            <a href="/" class="btn btn-outline-light btn-sm">Dashboard</a>
+            {% if session.get('user') %}
+                <span class="badge bg-success">Logged in: {{ session.get('user') }}</span>
+                <a href="/logout" class="btn btn-danger btn-sm">Logout</a>
+            {% else %}
+                <a href="/login" class="btn btn-warning btn-sm">Admin Login</a>
+            {% endif %}
+        </div>
+    </div>
+</nav>
+
+<main class="container my-4">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show">{{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% if page == 'login' %}
+    <div class="card mx-auto shadow-sm" style="max-width: 420px;">
+        <div class="card-body p-4">
+            <h1 class="h4 mb-3">🔐 Secure User Login</h1>
+            <form method="POST" action="/login">
+                <div class="mb-3">
+                    <label class="form-label">Username</label>
+                    <input type="text" name="username" class="form-control" value="wajid" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input type="password" name="password" class="form-control" value="kau2026" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Login (Bcrypt Hashed)</button>
+            </form>
+        </div>
+    </div>
+
+    {% elif page == 'dashboard' %}
+    <div class="row g-4">
+        <!-- Input Capture Column -->
+        <div class="col-lg-5">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white fw-bold">
+                    1. Capture Picture, Upload File, or Speak
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/records/add" enctype="multipart/form-data" id="captureForm">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">📷 Upload Image / Take Camera Photo / Upload .TXT</label>
+                            <input type="file" name="file" id="fileInput" class="form-control" accept="image/*,.txt" capture="environment">
+                            <div class="mt-2 d-flex gap-2">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="startWebcam()">💻 Use Laptop Webcam</button>
+                                <button type="button" class="btn btn-success btn-sm d-none" id="snapBtn" onclick="takeSnapshot()">📸 Snap Photo</button>
+                            </div>
+                            <video id="webcam" class="w-100 mt-2 rounded d-none" autoplay playsinline></video>
+                            <canvas id="canvas" class="d-none"></canvas>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">🎤 Voice-to-Text or Direct Text Note</label>
+                            <div class="input-group mb-2">
+                                <button type="button" id="micBtn" class="btn btn-danger" onclick="toggleVoice()">🎤 Record Voice</button>
+                                <span class="input-group-text bg-white text-muted small" id="micStatus">Click mic & speak</span>
+                            </div>
+                            <textarea name="voice_text" id="voiceText" rows="3" class="form-control" placeholder="Speak or type here (e.g. 'Bought coffee and sandwich from Tim Hortons for 32 SAR today' or any general study note)..."></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 fw-bold">⚡ Extract & Save Structured .TXT</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search & Stored Records Table -->
+        <div class="col-lg-7">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h2 class="h6 mb-0 fw-bold">2. Stored Structured Records (Tabular View)</h2>
+                    <form method="GET" action="/records/search" class="d-flex gap-2">
+                        <input type="text" name="q" value="{{ query }}" class="form-control form-control-sm" placeholder="Search name, shop, item...">
+                        <button type="submit" class="btn btn-dark btn-sm">Search</button>
+                    </form>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Type</th>
+                                    <th>Name / Title</th>
+                                    <th>Shop</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for r in records %}
+                                <tr>
+                                    <td>#{{ r.id }}</td>
+                                    <td><span class="badge bg-info text-dark">{{ r.record_type }}</span></td>
+                                    <td class="fw-semibold">{{ r.name }}</td>
+                                    <td>{{ r.shop }}</td>
+                                    <td>{{ r.doc_date }}</td>
+                                    <td>
+                                        <a href="/records/view?id={{ r.id }}" class="btn btn-sm btn-outline-primary">View / Edit</a>
+                                        <a href="/records/download?id={{ r.id }}&format=txt" class="btn btn-sm btn-outline-secondary">.TXT</a>
+                                        <a href="/records/download?id={{ r.id }}&format=pdf" class="btn btn-sm btn-outline-danger">.PDF</a>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="6" class="text-center text-muted py-4">No records yet. Upload a receipt picture or record voice on the left!</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% elif page == 'view' %}
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span>✏️ Review & Edit Extracted Record #{{ record.id }}</span>
+                    <button class="btn btn-sm btn-warning" onclick="navigator.clipboard.writeText(window.location.href); alert('Shareable URL Copied!');">🔗 Share Link</button>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/records/edit">
+                        <input type="hidden" name="id" value="{{ record.id }}">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Category Type</label>
+                                <select name="record_type" class="form-select">
+                                    <option value="Purchase/Receipt" {% if record.record_type == 'Purchase/Receipt' %}selected{% endif %}>Purchase/Receipt</option>
+                                    <option value="General Document" {% if record.record_type == 'General Document' %}selected{% endif %}>General Document</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Date</label>
+                                <input type="text" name="doc_date" class="form-control" value="{{ record.doc_date }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Record / Document Name</label>
+                                <input type="text" name="name" class="form-control" value="{{ record.name }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Shop / Merchant (if applicable)</label>
+                                <input type="text" name="shop" class="form-control" value="{{ record.shop }}">
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold">Total Amount</label>
+                                <input type="text" name="total_amount" class="form-control" value="{{ record.total_amount }}">
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold">Purchased Items (Tabular Format: Item | Qty | Price)</label>
+                                <textarea name="items" rows="3" class="form-control font-monospace">{{ record.items }}</textarea>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold">Document Information / Plain Text Notes</label>
+                                <textarea name="plain_text" rows="4" class="form-control">{{ record.plain_text }}</textarea>
+                            </div>
+                        </div>
+                        <div class="mt-3 d-flex justify-content-between">
+                            <button type="submit" class="btn btn-success fw-bold">💾 Save Edits & Update .TXT File</button>
+                    </form>
+                            <form method="POST" action="/records/delete" onsubmit="return confirm('Delete this record?');">
+                                <input type="hidden" name="id" value="{{ record.id }}">
+                                <button type="submit" class="btn btn-outline-danger">🗑️ Delete</button>
+                            </form>
+                        </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-header bg-secondary text-white fw-bold">📄 Generated Structured .TXT File</div>
+                <div class="card-body">
+                    <pre class="bg-dark text-success p-3 rounded small mb-3">{{ record.raw_txt_content }}</pre>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="/records/download?id={{ record.id }}&format=txt" class="btn btn-dark btn-sm">⬇️ Download .TXT</a>
+                        <a href="/records/download?id={{ record.id }}&format=pdf" class="btn btn-danger btn-sm">⬇️ Convert & Download .PDF</a>
+                        <a href="/records/download?id={{ record.id }}&format=csv" class="btn btn-success btn-sm">⬇️ Export Tabular .CSV</a>
+                    </div>
+                </div>
+            </div>
+            {% if record.image_filename %}
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-light fw-bold">🖼️ Uploaded Image / File</div>
+                <div class="card-body text-center">
+                    <img src="/uploads/{{ record.image_filename }}" alt="Uploaded Scanned Document" class="img-fluid rounded border mb-2" style="max-height: 260px;">
+                    <br><a href="/uploads/{{ record.image_filename }}" download class="btn btn-sm btn-outline-primary">Download Original File</a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</main>
+
+<script>
+// Voice-to-Text Web Speech API
+let recognition;
+let isRecording = false;
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+        }
+        document.getElementById('voiceText').value = transcript;
+    };
+}
+function toggleVoice() {
+    if (!recognition) { alert("Use Chrome or Edge for Voice-to-Text."); return; }
+    const btn = document.getElementById('micBtn');
+    const status = document.getElementById('micStatus');
+    if (!isRecording) {
+        recognition.start();
+        isRecording = true;
+        btn.innerText = "⏹️ Stop Recording";
+        status.innerText = "Listening... Speak now!";
+    } else {
+        recognition.stop();
+        isRecording = false;
+        btn.innerText = "🎤 Record Voice";
+        status.innerText = "Voice captured!";
+    }
+}
+
+// Live Webcam Capture
+let videoStream;
+async function startWebcam() {
+    const video = document.getElementById('webcam');
+    const snapBtn = document.getElementById('snapBtn');
+    videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = videoStream;
+    video.classList.remove('d-none');
+    snapBtn.classList.remove('d-none');
+}
+function takeSnapshot() {
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+        const file = new File([blob], "webcam_capture.jpg", { type: "image/jpeg" });
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        document.getElementById('fileInput').files = dt.files;
+        videoStream.getTracks().forEach(t => t.stop());
+        video.classList.add('d-none');
+        document.getElementById('snapBtn').classList.add('d-none');
+        alert("Photo snapped and attached! Click 'Extract & Save' below.");
+    }, 'image/jpeg');
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

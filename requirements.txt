@@ -1,0 +1,5 @@
+Flask==3.0.3
+google-genai==0.3.0
+fpdf2==2.7.9
+Werkzeug==3.0.3
+gunicorn==22.0.0
