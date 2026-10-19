@@ -14,7 +14,7 @@ from google.genai import types
 
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="template")
 app.secret_key = os.environ.get("SECRET_KEY", "cpit251-sbs-secret-key-2026")
 
 # Folders for storing uploaded images and structured .txt files
@@ -56,6 +56,9 @@ init_db()
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def filename_stem(filename):
+    return os.path.splitext(secure_filename(filename))[0]
 
 def format_structured_txt(data):
     """Formats extracted data into a clean, parseable tabular .txt file."""
@@ -120,7 +123,7 @@ def analyze_with_gemini(image_path=None, voice_text=None):
             contents.append(f"Input Text/Voice Transcript: {voice_text}")
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             contents=contents,
             config=types.GenerateContentConfig(response_mime_type="application/json")
         )
@@ -173,11 +176,14 @@ def index():
 @app.route("/records/add", methods=["POST"])
 def add_record():
     voice_text = request.form.get("voice_text", "").strip()
+    requested_name = request.form.get("record_name", "").strip()
     file = request.files.get("file")
     img_filename = ""
     img_path = None
+    uploaded_name = ""
 
     if file and file.filename and allowed_file(file.filename):
+        uploaded_name = filename_stem(file.filename)
         ext = file.filename.rsplit(".", 1)[1].lower()
         img_filename = secure_filename(f"scan_{int(datetime.now().timestamp())}.{ext}")
         img_path = os.path.join(UPLOAD_FOLDER, img_filename)
@@ -188,8 +194,11 @@ def add_record():
             img_path = None
 
     extracted = analyze_with_gemini(image_path=img_path, voice_text=voice_text)
+    record_name = requested_name or uploaded_name or extracted.get("name", "Untitled")
+    extracted["name"] = record_name
     raw_txt = format_structured_txt(extracted)
-    txt_filename = f"record_{int(datetime.now().timestamp())}.txt"
+    txt_stem = secure_filename(record_name) or f"record_{int(datetime.now().timestamp())}"
+    txt_filename = f"{txt_stem}_{int(datetime.now().timestamp())}.txt"
     txt_path = os.path.join(TXT_FOLDER, txt_filename)
     with open(txt_path, "w", encoding="utf-8") as f:
         f.write(raw_txt)
