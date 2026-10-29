@@ -1,2 +1,8 @@
 .env
 *.env
+*.env.*
+__pycache__/
+*.py[cod]
+sbs_records.db
+uploads/
+records_txt/

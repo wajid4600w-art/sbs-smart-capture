@@ -7,18 +7,722 @@
     <meta name="keywords" content="Budgeting, OCR Receipt Scanner, Voice to Text, KAU, CPIT 251, Structured Text to PDF">
     <title>SBS Smart Capture | AI Receipt & Voice Extractor</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --sbs-ink: #172033;
+            --sbs-muted: #6b7280;
+            --sbs-primary: #3157d5;
+            --sbs-primary-dark: #233fa3;
+            --sbs-blue-soft: #eff6ff;
+            --sbs-green: #0f9f83;
+            --sbs-surface: #ffffff;
+            --sbs-background: #f4f7fb;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        .capture-section {
+            border: 1px solid #e6eaf2;
+            border-radius: 14px;
+            padding: 1rem;
+            background: #fbfcff;
+        }
+
+        .capture-panel {
+            height: 100%;
+        }
+
+        .capture-panel .card-body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .capture-panel form {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+        }
+
+        .capture-panel form > .btn {
+            margin-top: auto;
+        }
+
+        .recent-record-card {
+            border-bottom: 1px solid #e6eaf2;
+            padding: .55rem .75rem .75rem;
+            height: 100%;
+        }
+
+        .recent-record-card:last-child {
+            border-bottom-color: transparent;
+        }
+
+        .recent-record-card .record-icon,
+        .metric-icon,
+        .brand-mark {
+            transition: transform .18s ease, box-shadow .18s ease;
+        }
+
+        .recent-record-card .record-icon:hover,
+        .metric-icon:hover,
+        .brand-mark:hover {
+            box-shadow: 0 8px 18px rgba(49, 87, 213, .2);
+            transform: scale(1.16);
+        }
+
+        .recent-records-row {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 0;
+            overflow-x: auto;
+        }
+
+        .record-row.paper-flight {
+            animation: paperToBin .65s ease-in forwards;
+            transform-origin: center left;
+        }
+
+        @keyframes paperToBin {
+            0% { opacity: 1; transform: translateX(0) rotate(0) scale(1); }
+            45% { opacity: .9; transform: translateX(35px) rotate(5deg) scale(.98); }
+            100% { opacity: 0; transform: translateX(180px) rotate(18deg) scale(.72); }
+        }
+
+        .trash-note {
+            background: #fff8e8;
+            border: 1px solid #f4dfaa;
+            border-radius: 12px;
+            color: #80621b;
+            padding: .85rem 1rem;
+        }
+
+        .recent-record-item {
+            flex: 0 0 14.28%;
+            min-width: 150px;
+        }
+
+        .audio-help {
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+        body {
+            background: var(--sbs-background) !important;
+            color: var(--sbs-ink);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .lucide {
+            height: 1em;
+            stroke-width: 2;
+            vertical-align: -.12em;
+            width: 1em;
+        }
+
+        .lucide-lg {
+            height: 1.15rem;
+            width: 1.15rem;
+        }
+
+        .navbar {
+            background: linear-gradient(110deg, #172033, #263c78) !important;
+            min-height: 72px;
+        }
+
+        .navbar-brand {
+            letter-spacing: -.02em;
+        }
+
+        .brand-mark {
+            display: inline-flex;
+            width: 48px;
+            height: 48px;
+            align-items: center;
+            justify-content: center;
+            margin-right: .7rem;
+            border-radius: 15px;
+            background: linear-gradient(145deg, #ffffff, #cbd8ff);
+            color: var(--sbs-primary-dark);
+            font-size: 1.65rem;
+            box-shadow: 0 7px 18px rgba(0, 0, 0, .18);
+        }
+
+        .brand-copy {
+            display: inline-flex;
+            flex-direction: column;
+            line-height: 1.05;
+        }
+
+        .brand-copy small {
+            color: #b7c5f5;
+            font-size: .64rem;
+            font-weight: 500;
+            letter-spacing: .12em;
+            margin-top: .25rem;
+            text-transform: uppercase;
+        }
+
+        .nav-link-custom {
+            color: #dce5ff;
+            font-size: .88rem;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .nav-link-custom:hover {
+            color: #ffffff;
+        }
+
+        .feature-card {
+            height: 100%;
+            padding: 1.3rem;
+            background: linear-gradient(145deg, #ffffff, #f3f6ff);
+        }
+
+        .feature-icon {
+            align-items: center;
+            background: #e8edff;
+            border-radius: 13px;
+            color: var(--sbs-primary);
+            display: inline-flex;
+            font-size: 1.4rem;
+            height: 48px;
+            justify-content: center;
+            margin-bottom: .85rem;
+            width: 48px;
+        }
+
+        .faq-item {
+            border: 1px solid #e6eaf2;
+            border-radius: 12px;
+            margin-bottom: .75rem;
+            padding: 1rem 1.1rem;
+            background: #fff;
+        }
+
+        .faq-item summary {
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        main.container {
+            max-width: 1440px;
+        }
+
+        .page-intro {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 1rem;
+            margin: 2rem 0 1.5rem;
+        }
+
+        .page-intro h1 {
+            font-size: clamp(1.7rem, 3vw, 2.45rem);
+            font-weight: 800;
+            letter-spacing: -.04em;
+            margin-bottom: .45rem;
+        }
+
+        .page-intro p {
+            color: var(--sbs-muted);
+            margin-bottom: 0;
+        }
+
+        .card {
+            border: 1px solid #e6eaf2 !important;
+            border-radius: 18px !important;
+            box-shadow: 0 12px 30px rgba(31, 45, 80, .07) !important;
+            overflow: hidden;
+        }
+
+        .card-header {
+            border-bottom: 1px solid #edf0f5;
+            padding: 1rem 1.25rem;
+        }
+
+        .card-header.bg-primary {
+            background: var(--sbs-primary) !important;
+        }
+
+        .card-header.bg-dark {
+            background: linear-gradient(110deg, #172033, #2d416f) !important;
+        }
+
+        .card-body {
+            padding: 1.35rem;
+        }
+
+        .form-label {
+            color: #344054;
+            font-size: .88rem;
+        }
+
+        .form-control,
+        .form-select {
+            border-color: #dce2ed;
+            border-radius: 10px;
+            min-height: 44px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: #7b95ec;
+            box-shadow: 0 0 0 .22rem rgba(49, 87, 213, .13);
+        }
+
+        .btn {
+            border-radius: 9px;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: var(--sbs-primary);
+            border-color: var(--sbs-primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--sbs-primary-dark);
+            border-color: var(--sbs-primary-dark);
+        }
+
+        .table {
+            --bs-table-hover-bg: #f7f9fd;
+            margin-bottom: 0;
+        }
+
+        .table th {
+            color: #667085;
+            font-size: .73rem;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .table td {
+            color: #344054;
+            padding: 1rem .75rem;
+        }
+
+        .table .badge {
+            border-radius: 999px;
+            font-weight: 600;
+            padding: .45rem .65rem;
+        }
+
+        .paste-zone {
+            border: 2px dashed #adb5bd;
+            border-radius: 12px;
+            padding: .8rem;
+            text-align: center;
+            cursor: pointer;
+            background: #f8faff;
+            transition: .2s ease;
+        }
+        .paste-zone:focus,
+        .paste-zone:hover,
+        .paste-zone-active {
+            border-color: #0d6efd;
+            background: #e7f1ff;
+            outline: none;
+        }
+
+        .capture-tip {
+            display: flex;
+            gap: .55rem;
+            align-items: flex-start;
+            padding: .8rem;
+            border-radius: 10px;
+            background: #f5f7ff;
+            color: #586174;
+            font-size: .8rem;
+        }
+
+        .empty-state {
+            padding: 3rem 1rem !important;
+        }
+
+        .dashboard-hero {
+            background:
+                radial-gradient(circle at 90% 15%, rgba(114, 139, 255, .35), transparent 28%),
+                linear-gradient(120deg, #172033, #3157d5);
+            border: 0 !important;
+            color: #fff;
+            isolation: isolate;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .dashboard-hero::before {
+            background: rgba(255, 255, 255, .06);
+            border-radius: 50%;
+            content: "";
+            height: 260px;
+            position: absolute;
+            right: -70px;
+            top: -150px;
+            width: 260px;
+            z-index: -1;
+        }
+
+        .dashboard-hero p {
+            color: #dce5ff;
+            max-width: 650px;
+        }
+
+        .dashboard-hero .display-1 {
+            animation: floatGuide 4s ease-in-out infinite;
+        }
+
+        .metric-card {
+            border: 0 !important;
+            height: 100%;
+            padding: 1.15rem;
+            position: relative;
+        }
+
+        .metric-rail {
+            display: flex;
+            flex-direction: column;
+            gap: .75rem;
+            height: 100%;
+        }
+
+        .metric-rail .metric-card {
+            align-items: start;
+            display: grid;
+            grid-template-columns: 48px 1fr;
+            gap: .65rem .85rem;
+            min-height: 142px;
+            padding: 1.15rem;
+        }
+
+        .metric-card {
+            background: linear-gradient(145deg, #ffffff, var(--sbs-blue-soft));
+            border: 1px solid #e4eaff !important;
+            overflow: hidden;
+            transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+        }
+
+        .metric-card::after {
+            background: linear-gradient(120deg, transparent, rgba(255, 255, 255, .75), transparent);
+            content: "";
+            height: 180%;
+            left: -120%;
+            position: absolute;
+            top: -40%;
+            transform: rotate(20deg);
+            transition: left .55s ease;
+            width: 55%;
+            z-index: 0;
+        }
+
+        .metric-card > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .metric-card:hover {
+            border-color: #b8c8ff !important;
+            box-shadow: 0 16px 30px rgba(49, 87, 213, .14) !important;
+            transform: translateY(-5px);
+        }
+
+        .metric-card:hover::after {
+            left: 125%;
+        }
+
+        .metric-card:hover .metric-icon {
+            animation: metricIconBounce .55s ease;
+            box-shadow: 0 10px 20px rgba(49, 87, 213, .2);
+            transform: scale(1.08) rotate(-4deg);
+        }
+
+        .metric-card:hover .metric-bar span {
+            animation: metricBarPulse 1s ease-in-out infinite alternate;
+        }
+
+        .metric-rail .metric-card .small {
+            margin-top: 0 !important;
+        }
+
+        .metric-card .metric-detail {
+            color: var(--sbs-muted);
+            font-size: .75rem;
+            line-height: 1.35;
+            margin-top: .2rem;
+        }
+
+        .metric-card .metric-link {
+            display: inline-block;
+            font-size: .75rem;
+            margin-top: .35rem;
+        }
+
+        .metric-card .metric-value {
+            align-self: start;
+            font-size: 1.9rem;
+            grid-column: 2;
+            grid-row: 1;
+            justify-self: end;
+        }
+
+        .metric-card .metric-info {
+            grid-column: 1 / -1;
+        }
+
+        .metric-card .metric-bar {
+            background: #dce6ff;
+            border-radius: 999px;
+            height: 7px;
+            margin-top: .8rem;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .metric-card .metric-bar span {
+            background: linear-gradient(90deg, var(--sbs-primary), #6f8cff);
+            border-radius: inherit;
+            display: block;
+            height: 100%;
+            transform-origin: left center;
+        }
+
+        .metric-card:nth-child(2) .metric-bar span {
+            background: linear-gradient(90deg, #0f9f83, #5acdb5);
+        }
+
+        .metric-card:nth-child(3) .metric-bar span {
+            background: linear-gradient(90deg, #f0a429, #ffd37d);
+        }
+
+        .capture-card-body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .capture-card-body form {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+        }
+
+        .capture-card-body form > .btn {
+            margin-top: auto;
+        }
+
+        .visual-card {
+            border: 1px solid #dfe7fb !important;
+            display: flex;
+            box-shadow: 0 12px 28px rgba(49, 87, 213, .1) !important;
+        }
+
+        .audio-card {
+            display: flex;
+        }
+
+        .visual-card .card-header,
+        .audio-card .card-header {
+            padding: 1rem 1.15rem;
+        }
+
+        .visual-card .paste-zone {
+            min-height: 78px;
+            padding: .7rem;
+        }
+
+        .visual-card .capture-tip {
+            background: #eef4ff;
+            border-left: 4px solid var(--sbs-primary);
+        }
+
+        .visual-card .visual-capture-preview {
+            min-height: 58px;
+            padding: .6rem .8rem;
+        }
+
+        .visual-card .visual-capture-preview .lucide {
+            height: 1.6rem;
+            width: 1.6rem;
+        }
+
+        .visual-capture-preview {
+            align-items: center;
+            background: linear-gradient(135deg, #f8fbff, #eef4ff);
+            border: 1px dashed #b9c9f4;
+            border-radius: 12px;
+            color: var(--sbs-primary);
+            display: flex;
+            gap: .75rem;
+            min-height: 76px;
+            padding: .8rem 1rem;
+        }
+
+        .visual-capture-preview .lucide {
+            height: 2rem;
+            width: 2rem;
+        }
+
+        @keyframes metricIconBounce {
+            0%, 100% { transform: scale(1.08) rotate(-4deg); }
+            50% { transform: scale(1.18) rotate(4deg); }
+        }
+
+        @keyframes metricBarPulse {
+            from { filter: brightness(1); transform: scaleY(1); }
+            to { filter: brightness(1.12); transform: scaleY(1.35); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .metric-card,
+            .metric-card::after,
+            .metric-card .metric-icon,
+            .metric-card .metric-bar span {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+
+        .metric-card .metric-icon {
+            align-items: center;
+            background: rgba(49, 87, 213, .1);
+            border-radius: 12px;
+            color: var(--sbs-primary);
+            display: inline-flex;
+            font-size: 1.3rem;
+            height: 42px;
+            justify-content: center;
+            width: 42px;
+        }
+
+        .metric-value {
+            font-size: 1.85rem;
+            font-weight: 800;
+            letter-spacing: -.04em;
+        }
+
+        .selection-toolbar {
+            background: #f5f7ff;
+            border: 1px solid #e1e7ff;
+            border-radius: 12px;
+            padding: .8rem 1rem;
+        }
+
+        .guide-panel {
+            background: linear-gradient(135deg, #effcf9, #f1f5ff);
+            border: 1px solid #dcebe9 !important;
+        }
+
+        .dashboard-section-label {
+            align-items: center;
+            display: flex;
+            gap: .55rem;
+            margin-bottom: .85rem;
+        }
+
+        .dashboard-section-label .lucide {
+            color: var(--sbs-primary);
+        }
+
+        .guide-stage {
+            align-items: center;
+            background: linear-gradient(135deg, #172033, #3157d5);
+            border-radius: 16px;
+            color: #fff;
+            display: flex;
+            min-height: 205px;
+            overflow: hidden;
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        .guide-orbit {
+            align-items: center;
+            animation: floatGuide 4s ease-in-out infinite;
+            background: rgba(255, 255, 255, .13);
+            border: 1px solid rgba(255, 255, 255, .25);
+            border-radius: 50%;
+            display: flex;
+            font-size: 3rem;
+            height: 132px;
+            justify-content: center;
+            margin-left: auto;
+            width: 132px;
+        }
+
+        .guide-step {
+            animation: guideStep 9s infinite;
+            font-weight: 700;
+            max-width: 230px;
+        }
+
+        .guide-step span {
+            color: #b7c5f5;
+            display: block;
+            font-size: .75rem;
+            letter-spacing: .12em;
+            margin-bottom: .45rem;
+            text-transform: uppercase;
+        }
+
+        @keyframes floatGuide {
+            0%, 100% { transform: translateY(0) rotate(-4deg); }
+            50% { transform: translateY(-9px) rotate(4deg); }
+        }
+
+        @keyframes guideStep {
+            0%, 28% { opacity: 1; transform: translateX(0); }
+            33%, 94% { opacity: .7; transform: translateX(5px); }
+            100% { opacity: 1; transform: translateX(0); }
+        }
+
+        .capture-anchor {
+            scroll-margin-top: 24px;
+        }
+
+        @media (max-width: 767.98px) {
+            .page-intro {
+                align-items: flex-start;
+                flex-direction: column;
+                margin-top: 1.25rem;
+            }
+
+            .navbar .container {
+                gap: .75rem;
+            }
+
+            .navbar .d-flex {
+                flex-wrap: wrap;
+                justify-content: end;
+            }
+
+            .recent-record-item {
+                flex-basis: 72%;
+            }
+        }
+    </style>
 </head>
 <body class="bg-light">
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="/">🧾 SBS Smart Capture Hub</a>
-        <div class="d-flex align-items-center gap-2">
-            <a href="/" class="btn btn-outline-light btn-sm">Dashboard</a>
-            {% if session.get('user') %}
-                <span class="badge bg-success">Logged in: {{ session.get('user') }}</span>
+        <a class="navbar-brand fw-bold d-flex align-items-center" href="/">
+            <span class="brand-mark">🧾</span>
+            <span class="brand-copy">SBS Smart Capture<small>Smart records workspace</small></span>
+        </a>
+        <div class="d-flex align-items-center gap-3">
+            <a href="/" class="nav-link-custom">Dashboard</a>
+            <a href="/records" class="nav-link-custom">Records</a>
+            <a href="/about" class="nav-link-custom">About</a>
+            <a href="/help" class="nav-link-custom">Help</a>
+            {% if session.get('user_id') %}
+                <span class="badge bg-success">Logged in: {{ session.get('user_email') }}</span>
                 <a href="/logout" class="btn btn-danger btn-sm">Logout</a>
             {% else %}
-                <a href="/login" class="btn btn-warning btn-sm">Admin Login</a>
+                <a href="/login" class="btn btn-warning btn-sm">Login</a>
+                <a href="/register" class="btn btn-outline-light btn-sm">Create account</a>
             {% endif %}
         </div>
     </div>
@@ -41,105 +745,381 @@
             <h1 class="h4 mb-3">🔐 Secure User Login</h1>
             <form method="POST" action="/login">
                 <div class="mb-3">
-                    <label class="form-label">Username</label>
-                    <input type="text" name="username" class="form-control" value="wajid" required>
+                    <label class="form-label">Email address</label>
+                    <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Password</label>
-                    <input type="password" name="password" class="form-control" value="kau2026" required>
+                    <input type="password" name="password" class="form-control" required>
                 </div>
-                <button type="submit" class="btn btn-primary w-100">Login (Bcrypt Hashed)</button>
+                <button type="submit" class="btn btn-primary w-100">Log in securely</button>
             </form>
+            <p class="small text-muted mt-3 mb-0">New here? <a href="/register">Create an account</a>.</p>
+        </div>
+    </div>
+
+    {% elif page == 'register' %}
+    <div class="card mx-auto shadow-sm" style="max-width: 460px;">
+        <div class="card-body p-4">
+            <h1 class="h4 mb-2">Create your SBS account</h1>
+            <p class="text-muted small">Your records will be stored separately from other users.</p>
+            <form method="POST" action="/register">
+                <div class="mb-3">
+                    <label class="form-label">Email address</label>
+                    <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input type="password" name="password" class="form-control" minlength="8" required>
+                    <div class="form-text">Use at least 8 characters.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Confirm password</label>
+                    <input type="password" name="confirm_password" class="form-control" minlength="8" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Create account</button>
+            </form>
+            <p class="small text-muted mt-3 mb-0">Already registered? <a href="/login">Log in</a>.</p>
         </div>
     </div>
 
     {% elif page == 'dashboard' %}
-    <div class="row g-4">
-        <!-- Input Capture Column -->
-        <div class="col-lg-5">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-primary text-white fw-bold">
-                    1. Capture Picture, Upload File, or Speak
+    <div class="card dashboard-hero mb-4">
+        <div class="card-body p-4 p-md-5">
+            <div class="row align-items-center g-4">
+                <div class="col-lg-8">
+                    <span class="badge rounded-pill bg-light text-primary mb-3">AI-powered record workspace</span>
+                    <h1 class="display-6 fw-bold mb-3">Capture once. Get organized instantly.</h1>
+                    <p class="lead mb-4">Transform receipts, documents, screenshots, and voice notes into searchable, editable, and presentation-ready records.</p>
+                    <a href="#capture" class="btn btn-light text-primary me-2">Start capturing</a>
+                    <a href="/records" class="btn btn-outline-light">Explore record library</a>
                 </div>
-                <div class="card-body">
-                    <form method="POST" action="/records/add" enctype="multipart/form-data" id="captureForm">
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">📷 Upload Image / Take Camera Photo / Upload .TXT</label>
-                            <input type="file" name="file" id="fileInput" class="form-control" accept="image/*,.txt" capture="environment">
-                            <div class="mt-2 d-flex gap-2">
-                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="startWebcam()">💻 Use Laptop Webcam</button>
-                                <button type="button" class="btn btn-success btn-sm d-none" id="snapBtn" onclick="takeSnapshot()">📸 Snap Photo</button>
-                            </div>
-                            <video id="webcam" class="w-100 mt-2 rounded d-none" autoplay playsinline></video>
-                            <canvas id="canvas" class="d-none"></canvas>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">💾 Save Name (optional)</label>
-                            <input type="text" name="record_name" class="form-control"
-                                   placeholder="Leave blank to use the uploaded filename">
-                            <div class="form-text">This becomes the record title and structured .TXT filename.</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">🎤 Voice-to-Text or Direct Text Note</label>
-                            <div class="input-group mb-2">
-                                <button type="button" id="micBtn" class="btn btn-danger" onclick="toggleVoice()">🎤 Record Voice</button>
-                                <span class="input-group-text bg-white text-muted small" id="micStatus">Click mic & speak</span>
-                            </div>
-                            <textarea name="voice_text" id="voiceText" rows="3" class="form-control" placeholder="Speak or type here (e.g. 'Bought coffee and sandwich from Tim Hortons for 32 SAR today' or any general study note)..."></textarea>
-                        </div>
-
-                        <button type="submit" class="btn btn-primary w-100 fw-bold">⚡ Extract & Save Structured .TXT</button>
-                    </form>
+                    <div class="col-lg-4 text-center d-none d-lg-block">
+                        <div class="display-1">✨</div>
+                        <div class="small text-white-50">Smart extraction · Secure storage · Easy export</div>
+                    </div>
                 </div>
             </div>
         </div>
-
-        <!-- Search & Stored Records Table -->
-        <div class="col-lg-7">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                    <h2 class="h6 mb-0 fw-bold">2. Stored Structured Records (Tabular View)</h2>
-                    <form method="GET" action="/records/search" class="d-flex gap-2">
-                        <input type="text" name="q" value="{{ query }}" class="form-control form-control-sm" placeholder="Search name, shop, item...">
-                        <button type="submit" class="btn btn-dark btn-sm">Search</button>
-                    </form>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Type</th>
-                                    <th>Name / Title</th>
-                                    <th>Shop</th>
-                                    <th>Date</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for r in records %}
-                                <tr>
-                                    <td>#{{ r.id }}</td>
-                                    <td><span class="badge bg-info text-dark">{{ r.record_type }}</span></td>
-                                    <td class="fw-semibold">{{ r.name }}</td>
-                                    <td>{{ r.shop }}</td>
-                                    <td>{{ r.doc_date }}</td>
-                                    <td>
-                                        <a href="/records/view?id={{ r.id }}" class="btn btn-sm btn-outline-primary">View / Edit</a>
-                                        <a href="/records/download?id={{ r.id }}&format=txt" class="btn btn-sm btn-outline-secondary">.TXT</a>
-                                        <a href="/records/download?id={{ r.id }}&format=pdf" class="btn btn-sm btn-outline-danger">.PDF</a>
-                                    </td>
-                                </tr>
-                                {% else %}
-                                <tr><td colspan="6" class="text-center text-muted py-4">No records yet. Upload a receipt picture or record voice on the left!</td></tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+    <div class="row g-4 align-items-stretch mb-4">
+        <div class="col-lg-8 capture-anchor" id="capture">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="card visual-card border-0 h-100">
+                        <div class="card-header bg-primary text-white fw-bold"><i data-lucide="image" class="lucide-lg me-2"></i>1. Create a visual record</div>
+                        <div class="card-body capture-card-body">
+                            <form method="POST" action="/records/add" enctype="multipart/form-data" id="visualCaptureForm">
+                                <div class="capture-tip mb-3"><span>📷</span><span>Upload, paste, drag, or capture a receipt or document image.</span></div>
+                                <div class="visual-capture-preview mb-3">
+                                    <i data-lucide="scan-line"></i>
+                                    <div><strong>Visual workspace</strong><div class="small text-muted">Turn a photo, scan, or screenshot into an organized record.</div></div>
+                                </div>
+                                <div class="capture-section mb-3">
+                                    <label class="form-label fw-semibold"><i data-lucide="upload" class="me-1"></i>Picture or document</label>
+                                    <input type="file" name="file" id="fileInput" class="form-control" accept="image/*,.txt" capture="environment">
+                                    <div id="pasteZone" class="paste-zone mt-2" tabindex="0" role="button" aria-label="Paste or drop an image here">
+                                        <div class="fw-semibold">📋 Paste an image here</div>
+                                        <div class="small text-muted">Click here and press Ctrl+V, or drag an image here.</div>
+                                        <div id="pasteStatus" class="small text-success mt-1 d-none"></div>
+                                        <img id="pastePreview" class="img-fluid rounded border mt-2 d-none" alt="Pasted image preview" style="max-height: 150px;">
+                                    </div>
+                                    <div class="mt-2 d-flex flex-wrap gap-2">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="startWebcam()">💻 Use webcam</button>
+                                        <button type="button" class="btn btn-success btn-sm d-none" id="snapBtn" onclick="takeSnapshot()">📸 Snap photo</button>
+                                    </div>
+                                    <video id="webcam" class="w-100 mt-2 rounded d-none" autoplay playsinline></video>
+                                    <canvas id="canvas" class="d-none"></canvas>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Record name</label>
+                                    <input type="text" name="record_name" class="form-control" placeholder="Optional title">
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100 fw-bold">Extract visual record</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
+                <div class="col-md-6">
+                    <div class="card audio-card shadow-sm border-0 h-100">
+                        <div class="card-header bg-success text-white fw-bold"><i data-lucide="mic-2" class="lucide-lg me-2"></i>2. Create an audio record</div>
+                        <div class="card-body capture-card-body">
+                            <form method="POST" action="/records/add" enctype="multipart/form-data" id="audioCaptureForm">
+                                <div class="capture-tip mb-3"><span>🎙️</span><span>Add an audio note up to five minutes, then save it as a structured record.</span></div>
+                                <div class="capture-section mb-3">
+                                    <label class="form-label fw-semibold"><i data-lucide="audio-lines" class="me-1"></i>Audio file</label>
+                                    <input type="file" name="audio_file" id="audioFile" class="form-control" accept="audio/*">
+                                    <input type="hidden" name="audio_duration" id="audioDuration">
+                                    <div class="audio-help mt-2">MP3, WAV, M4A, WEBM, or OGG · maximum 5 minutes.</div>
+                                    <div id="audioStatus" class="small mt-1"></div>
+                                    <div class="input-group mt-3 mb-2">
+                                        <button type="button" id="micBtn" class="btn btn-danger" onclick="toggleVoice()">🎤 Record voice</button>
+                                        <span class="input-group-text bg-white text-muted small" id="micStatus">Optional transcription</span>
+                                    </div>
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-sm-8">
+                                            <label class="form-label fw-semibold mb-1">Live note</label>
+                                            <textarea name="voice_text" id="voiceText" rows="4" class="form-control" placeholder="Type or dictate a note..."></textarea>
+                                        </div>
+                                        <div class="col-sm-4">
+                                            <label class="form-label fw-semibold mb-1">Category</label>
+                                            <input type="text" name="record_type" class="form-control" value="Audio" placeholder="Audio">
+                                            <div class="form-text">Custom label optional.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Record name</label>
+                                    <input type="text" name="record_name" class="form-control" placeholder="Optional title">
+                                </div>
+                                <button type="submit" class="btn btn-success w-100 fw-bold">Save audio record</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="metric-rail">
+                <div class="card metric-card"><div class="metric-icon"><i data-lucide="library"></i></div><div class="metric-value">{{ total_records }}</div><div class="metric-info"><div class="small text-muted">Total records</div><div class="metric-detail">Your complete searchable workspace.</div><div class="metric-bar"><span style="width: 92%;"></span></div><a href="/records" class="metric-link text-decoration-none">Open library →</a></div></div>
+                <div class="card metric-card"><div class="metric-icon"><i data-lucide="receipt"></i></div><div class="metric-value">{{ purchase_records }}</div><div class="metric-info"><div class="small text-muted">Purchases & receipts</div><div class="metric-detail">Track captured spending records.</div><div class="metric-bar"><span style="width: 68%;"></span></div><a href="/records?type=Purchase%2FReceipt" class="metric-link text-decoration-none">View purchases →</a></div></div>
+                <div class="card metric-card"><div class="metric-icon"><i data-lucide="file-text"></i></div><div class="metric-value">{{ general_records }}</div><div class="metric-info"><div class="small text-muted">General documents</div><div class="metric-detail">Keep notes and documents organized.</div><div class="metric-bar"><span style="width: 48%;"></span></div><a href="/records?type=General%20Document" class="metric-link text-decoration-none">View documents →</a></div></div>
+            </div>
+        </div>
+    </div>
+    <div class="row g-4 mt-1">
+        <div class="col-12">
+            <div class="card guide-panel">
+                <div class="card-body p-4">
+                    <div class="row align-items-center g-4">
+                        <div class="col-lg-7">
+                            <span class="badge rounded-pill text-bg-success mb-2">How SBS works</span>
+                            <h2 class="h4 fw-bold">Capture, organize, and export with confidence</h2>
+                            <p class="text-muted mb-0">Use visual capture for documents and audio capture for voice notes. SBS structures each submission so it can be reviewed and exported from the Records page.</p>
+                        </div>
+                        <div class="col-lg-5">
+                            <div class="guide-stage" aria-label="Capture, structure, and export illustration">
+                                <div class="guide-step"><span>Step 1 · 2 · 3</span>Capture → Structure → Export</div>
+                                <div class="guide-orbit">✨</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif page == 'records' %}
+    <div class="page-intro">
+        <div>
+            <h1>Record library</h1>
+            <p>Find, review, edit, and export every structured record from one organized workspace.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="/trash" class="btn btn-outline-danger">🗑 Recycle bin <span class="small">(10 days)</span></a>
+            <a href="/" class="btn btn-primary">＋ Capture a record</a>
+        </div>
+    </div>
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" action="/records" class="row g-3 align-items-end">
+                <div class="col-lg-7">
+                    <label class="form-label fw-semibold">Search records</label>
+                    <input type="search" name="q" value="{{ query }}" class="form-control" placeholder="Search by title, merchant, item, or text...">
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label fw-semibold">Record type</label>
+                    <select name="type" class="form-select">
+                        <option value="">All record types</option>
+                        <option value="Purchase/Receipt" {% if rtype == 'Purchase/Receipt' %}selected{% endif %}>Purchase / Receipt</option>
+                        <option value="General Document" {% if rtype == 'General Document' %}selected{% endif %}>General Document</option>
+                        <option value="Voice Record" {% if rtype == 'Voice Record' %}selected{% endif %}>Voice Record</option>
+                        <option value="Audio Record" {% if rtype == 'Audio Record' %}selected{% endif %}>Audio Record</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 d-flex gap-2">
+                    <button class="btn btn-primary flex-grow-1" type="submit">Search</button>
+                    <a href="/records" class="btn btn-outline-secondary">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+    <form method="POST" action="/records/export-excel" id="excelExportForm">
+    <div class="card">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div>
+                <h2 class="h5 mb-1 fw-bold">All saved records</h2>
+                <div class="small text-muted">Select records here for Excel or CSV export, or open one for full details.</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge text-bg-light border">{{ records|length }} result(s)</span>
+                <button class="btn btn-success btn-sm" type="submit">📊 Export selected to Excel</button>
+                <button class="btn btn-outline-danger btn-sm" type="submit" formaction="/records/trash" onclick="return animateTrash(this)">🗑 Move to bin</button>
+            </div>
+        </div>
+        <div class="selection-toolbar m-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <label class="small fw-semibold mb-0"><input type="checkbox" id="selectAllRecords" class="form-check-input me-2">Select all visible records</label>
+            <span class="small text-muted">Excel includes formatted headers, borders, filters, wrapped text, and print layout.</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light"><tr><th><span class="visually-hidden">Select</span></th><th>ID</th><th>Type</th><th>Name</th><th>Merchant</th><th>Date</th><th>Actions</th></tr></thead>
+                <tbody>
+                    {% for r in records %}
+                    <tr class="record-row">
+                        <td><input type="checkbox" name="record_ids" value="{{ r.id }}" class="form-check-input record-checkbox" aria-label="Select record {{ r.id }}"></td>
+                        <td>#{{ r.id }}</td>
+                        <td><span class="badge bg-info text-dark">{{ r.record_type }}</span></td>
+                        <td class="fw-semibold">{{ r.name }}</td>
+                        <td>{{ r.shop }}</td>
+                        <td>{{ r.doc_date }}</td>
+                        <td class="text-nowrap">
+                            <a href="/records/view?id={{ r.id }}" class="btn btn-sm btn-outline-primary">Open record</a>
+                            <a href="/records/download?id={{ r.id }}&format=pdf" class="btn btn-sm btn-outline-danger">PDF</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="text-center text-muted empty-state">No matching records found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    </form>
+
+    {% elif page == 'trash' %}
+    <div class="page-intro">
+        <div>
+            <h1>Recycle bin</h1>
+            <p>Deleted records remain recoverable for 10 days before automatic permanent removal.</p>
+        </div>
+        <a href="/records" class="btn btn-primary">← Back to records</a>
+    </div>
+    <div class="trash-note mb-4">
+        <i data-lucide="info" class="me-1"></i>
+        Restore a record to return it to the active library, or permanently delete it immediately.
+    </div>
+    <div class="card">
+        <div class="card-header bg-white">
+            <h2 class="h5 mb-1 fw-bold">Deleted records</h2>
+            <div class="small text-muted">{{ records|length }} record(s) currently in the bin.</div>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light"><tr><th>ID</th><th>Record</th><th>Type</th><th>Deleted</th><th>Retention</th><th>Actions</th></tr></thead>
+                <tbody>
+                    {% for r in records %}
+                    <tr>
+                        <td>#{{ r.id }}</td>
+                        <td class="fw-semibold">{{ r.name }}</td>
+                        <td><span class="badge bg-secondary">{{ r.record_type }}</span></td>
+                        <td>{{ r.deleted_at }}</td>
+                        <td><span class="badge text-bg-warning">{{ 10 - (r.age_days|int) }} day(s) left</span></td>
+                        <td class="d-flex gap-2">
+                            <form method="POST" action="/trash/restore"><input type="hidden" name="id" value="{{ r.id }}"><button class="btn btn-sm btn-outline-success" type="submit">Restore</button></form>
+                            <form method="POST" action="/trash/delete" onsubmit="return confirm('Permanently delete this record?');"><input type="hidden" name="id" value="{{ r.id }}"><button class="btn btn-sm btn-outline-danger" type="submit">Delete forever</button></form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="text-center text-muted empty-state">Your recycle bin is empty.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% elif page == 'about' %}
+    <div class="page-intro">
+        <div><h1>About SBS Smart Capture</h1><p>A practical workspace for turning everyday documents into useful, organized data.</p></div>
+    </div>
+    <div class="card p-4 p-md-5 mb-4">
+        <div class="row align-items-center g-4">
+            <div class="col-lg-7">
+                <span class="badge text-bg-primary mb-3">Built for simpler record keeping</span>
+                <h2 class="fw-bold">Capture once. Organize automatically.</h2>
+                <p class="text-muted">SBS Smart Capture helps users digitize receipts, invoices, screenshots, notes, and general documents. The system analyzes input, extracts meaningful fields, stores records in SQLite, and creates structured files for later use.</p>
+                <a href="/" class="btn btn-primary">Start capturing</a>
+                <a href="/help" class="btn btn-outline-secondary ms-2">View help</a>
+            </div>
+            <div class="col-lg-5"><div class="feature-card rounded-4"><div class="feature-icon">⚡</div><h3 class="h5 fw-bold">One simple workflow</h3><p class="text-muted mb-0">Upload, paste, use your camera, or speak. Then review, edit, search, download, or delete from one secure interface.</p></div></div>
+        </div>
+    </div>
+    <div class="row g-4">
+        <div class="col-md-4"><div class="feature-card card"><div class="feature-icon">📷</div><h3 class="h5 fw-bold">Flexible capture</h3><p class="text-muted mb-0">Upload images and text files, paste screenshots, use a webcam, or record a voice note.</p></div></div>
+        <div class="col-md-4"><div class="feature-card card"><div class="feature-icon">🧠</div><h3 class="h5 fw-bold">Smart extraction</h3><p class="text-muted mb-0">Extract titles, merchants, dates, totals, items, and document text with AI assistance.</p></div></div>
+        <div class="col-md-4"><div class="feature-card card"><div class="feature-icon">📁</div><h3 class="h5 fw-bold">Useful exports</h3><p class="text-muted mb-0">Keep records searchable and download them as structured TXT, PDF, or CSV files.</p></div></div>
+    </div>
+    <div class="row g-4 mt-1">
+        <div class="col-lg-6">
+            <div class="card h-100 p-4">
+                <span class="badge rounded-pill text-bg-success align-self-start mb-2">How the workflow works</span>
+                <h2 class="h5 fw-bold">From capture to a presentation-ready record</h2>
+                <div class="d-grid gap-3 mt-2">
+                    <div class="d-flex gap-3"><span class="badge text-bg-primary rounded-circle">1</span><div><strong>Capture</strong><p class="text-muted small mb-0">Upload, paste, photograph, or add an audio note from the dashboard.</p></div></div>
+                    <div class="d-flex gap-3"><span class="badge text-bg-primary rounded-circle">2</span><div><strong>Review</strong><p class="text-muted small mb-0">Check extracted fields, edit details, and add your own category or title.</p></div></div>
+                    <div class="d-flex gap-3"><span class="badge text-bg-primary rounded-circle">3</span><div><strong>Use</strong><p class="text-muted small mb-0">Search the library, download formatted files, or restore deleted records within ten days.</p></div></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100 p-4">
+                <span class="badge rounded-pill text-bg-primary align-self-start mb-2">Technical foundation</span>
+                <h2 class="h5 fw-bold">Designed as a complete web application</h2>
+                <p class="text-muted small">SBS uses a Flask server, SQLite database, HTML/CSS/JavaScript interface, file uploads, and structured export generation.</p>
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="badge bg-light text-dark border">Flask routes</span>
+                    <span class="badge bg-light text-dark border">SQLite storage</span>
+                    <span class="badge bg-light text-dark border">HTTPS-ready</span>
+                    <span class="badge bg-light text-dark border">Responsive UI</span>
+                    <span class="badge bg-light text-dark border">Search and filters</span>
+                    <span class="badge bg-light text-dark border">CRUD operations</span>
+                </div>
+                <p class="text-muted small mt-3 mb-0">The system separates the active library from the recycle bin and keeps uploaded media connected to its record.</p>
+            </div>
+        </div>
+    </div>
+
+    {% elif page == 'help' %}
+    <div class="page-intro">
+        <div><h1>Help center</h1><p>Quick answers for capturing, managing, and exporting your records.</p></div>
+    </div>
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card p-4">
+                <h2 class="h4 fw-bold mb-3">Frequently asked questions</h2>
+                <details class="faq-item" open><summary>How do I create a record?</summary><p class="text-muted mt-2 mb-0">From the dashboard, upload a file, paste a screenshot, use the webcam, or type/speak a note. Choose an optional name and press Extract & Save.</p></details>
+                <details class="faq-item"><summary>Where can I see all my records?</summary><p class="text-muted mt-2 mb-0">Open Records from the top navigation. Use the search field and record-type filter to narrow the library.</p></details>
+                <details class="faq-item"><summary>Can I correct extracted information?</summary><p class="text-muted mt-2 mb-0">Yes. Open any record, update its fields, and choose Save Edits. The structured TXT file is updated as well.</p></details>
+                <details class="faq-item"><summary>Which export formats are available?</summary><p class="text-muted mt-2 mb-0">Each record can be downloaded as TXT, PDF, or CSV. Original uploaded images can also be downloaded from the record page.</p></details>
+                <details class="faq-item"><summary>Why did AI extraction use sample data?</summary><p class="text-muted mt-2 mb-0">If no Gemini API key is configured, SBS uses a safe offline demonstration fallback so the workflow remains available.</p></details>
+                <details class="faq-item"><summary>How do I add an audio record?</summary><p class="text-muted mt-2 mb-0">Choose an audio file or use the live voice control, enter a title if needed, set the category beside the live note field, and select Save audio record. Audio files are limited to five minutes.</p></details>
+                <details class="faq-item"><summary>What happens when I delete a record?</summary><p class="text-muted mt-2 mb-0">The record is moved to the recycle bin instead of being removed immediately. Open the Recycle bin from the Records page to restore it or permanently delete it. Records are automatically removed after ten days.</p></details>
+                <details class="faq-item"><summary>Can I export more than one record?</summary><p class="text-muted mt-2 mb-0">Yes. Select records in the Records page, then choose Excel or CSV export. Excel includes formatted headers, borders, filters, and print-friendly layout.</p></details>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card p-4 mb-4">
+                <h2 class="h5 fw-bold">Need more help?</h2>
+                <p class="text-muted">For project support, contact the SBS team and include the record number and a short description of the issue.</p>
+                <a class="btn btn-primary" href="mailto:support@sbs-smartcapture.example">✉ Email support</a>
+            </div>
+            <div class="card p-4">
+                <h2 class="h5 fw-bold">Helpful shortcuts</h2>
+                <a class="d-block text-decoration-none mb-2" href="/">→ Open dashboard</a>
+                <a class="d-block text-decoration-none mb-2" href="/records">→ Browse record library</a>
+                <a class="d-block text-decoration-none" href="/about">→ Learn about SBS</a>
+            </div>
+            <div class="card p-4 mt-4">
+                <h2 class="h5 fw-bold">Quick troubleshooting</h2>
+                <ul class="text-muted small mb-0 ps-3">
+                    <li class="mb-2">Refresh with <strong>Ctrl + F5</strong> if the interface looks outdated.</li>
+                    <li class="mb-2">Allow microphone or camera permissions when using live capture.</li>
+                    <li class="mb-2">Use a supported image or audio format and keep audio under five minutes.</li>
+                    <li>Check the Records page after saving to search, edit, export, or move an item to the recycle bin.</li>
+                </ul>
+            </div>
+            <div class="card p-4 mt-4 border-primary">
+                <h2 class="h5 fw-bold">Need technical support?</h2>
+                <p class="text-muted small mb-2">When reporting an issue, include the page name, record number if available, browser, and the action that failed.</p>
+                <a class="small text-decoration-none" href="mailto:support@sbs-smartcapture.example">support@sbs-smartcapture.example</a>
             </div>
         </div>
     </div>
@@ -171,20 +1151,41 @@
                                 <label class="form-label fw-bold">Record / Document Name</label>
                                 <input type="text" name="name" class="form-control" value="{{ record.name }}" required>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">Shop / Merchant (if applicable)</label>
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Fields to include</label>
+                                <div class="d-flex flex-wrap gap-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input field-toggle" type="checkbox" name="include_shop" id="includeShop" data-target="shopField" {% if record.include_shop %}checked{% endif %}>
+                                        <label class="form-check-label" for="includeShop">Shop / merchant</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input field-toggle" type="checkbox" name="include_total" id="includeTotal" data-target="totalField" {% if record.include_total %}checked{% endif %}>
+                                        <label class="form-check-label" for="includeTotal">Total amount</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input field-toggle" type="checkbox" name="include_items" id="includeItems" data-target="itemsField" {% if record.include_items %}checked{% endif %}>
+                                        <label class="form-check-label" for="includeItems">Purchased items</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input field-toggle" type="checkbox" name="include_description" id="includeDescription" data-target="descriptionField" {% if record.include_description %}checked{% endif %}>
+                                        <label class="form-check-label" for="includeDescription">Description / raw input</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 d-none conditional-field" id="shopField">
+                                <label class="form-label fw-bold">Shop / Merchant</label>
                                 <input type="text" name="shop" class="form-control" value="{{ record.shop }}">
                             </div>
-                            <div class="col-md-12">
+                            <div class="col-md-6 d-none conditional-field" id="totalField">
                                 <label class="form-label fw-bold">Total Amount</label>
                                 <input type="text" name="total_amount" class="form-control" value="{{ record.total_amount }}">
                             </div>
-                            <div class="col-md-12">
+                            <div class="col-md-12 d-none conditional-field" id="itemsField">
                                 <label class="form-label fw-bold">Purchased Items (Tabular Format: Item | Qty | Price)</label>
                                 <textarea name="items" rows="3" class="form-control font-monospace">{{ record.items }}</textarea>
                             </div>
-                            <div class="col-md-12">
-                                <label class="form-label fw-bold">Document Information / Plain Text Notes</label>
+                            <div class="col-md-12 d-none conditional-field" id="descriptionField">
+                                <label class="form-label fw-bold">Description / Raw Input</label>
                                 <textarea name="plain_text" rows="4" class="form-control">{{ record.plain_text }}</textarea>
                             </div>
                         </div>
@@ -208,7 +1209,6 @@
                     <div class="d-flex flex-wrap gap-2">
                         <a href="/records/download?id={{ record.id }}&format=txt" class="btn btn-dark btn-sm">⬇️ Download .TXT</a>
                         <a href="/records/download?id={{ record.id }}&format=pdf" class="btn btn-danger btn-sm">⬇️ Convert & Download .PDF</a>
-                        <a href="/records/download?id={{ record.id }}&format=csv" class="btn btn-success btn-sm">⬇️ Export Tabular .CSV</a>
                     </div>
                 </div>
             </div>
@@ -221,10 +1221,26 @@
                 </div>
             </div>
             {% endif %}
+            {% if record.audio_filename %}
+            <div class="card shadow-sm border-0 mt-3">
+                <div class="card-header bg-light fw-bold">🎙️ Attached audio note</div>
+                <div class="card-body">
+                    <audio controls class="w-100 mb-2" src="/uploads/{{ record.audio_filename }}"></audio>
+                    <a href="/uploads/{{ record.audio_filename }}" download class="btn btn-sm btn-outline-primary">Download audio</a>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
     {% endif %}
 </main>
+
+<footer class="container pb-4 pt-3">
+    <div class="border-top pt-3 d-flex flex-wrap justify-content-between gap-2 text-muted small">
+        <span>© 2026 SBS Smart Capture · Organized records, simplified.</span>
+        <span><a class="text-decoration-none text-muted me-3" href="/about">About</a><a class="text-decoration-none text-muted me-3" href="/help">Help & FAQ</a><a class="text-decoration-none text-muted" href="mailto:support@sbs-smartcapture.example">Support</a></span>
+    </div>
+</footer>
 
 <script>
 // Voice-to-Text Web Speech API
@@ -289,6 +1305,118 @@ function takeSnapshot() {
     }, 'image/jpeg');
 }
 </script>
+<script>
+const selectAllRecords = document.getElementById('selectAllRecords');
+if (selectAllRecords) {
+    selectAllRecords.addEventListener('change', () => {
+        document.querySelectorAll('.record-checkbox').forEach((checkbox) => {
+            checkbox.checked = selectAllRecords.checked;
+        });
+    });
+}
+
+function animateTrash(button) {
+    const selected = [...document.querySelectorAll('.record-checkbox:checked')];
+    if (!selected.length) {
+        alert('Select at least one record to move to the recycle bin.');
+        return false;
+    }
+    selected.forEach((checkbox) => checkbox.closest('.record-row')?.classList.add('paper-flight'));
+    button.form.action = '/records/trash';
+    setTimeout(() => HTMLFormElement.prototype.submit.call(button.form), 650);
+    return false;
+}
+
+const audioFile = document.getElementById('audioFile');
+const audioStatus = document.getElementById('audioStatus');
+audioFile?.addEventListener('change', () => {
+    const file = audioFile.files[0];
+    if (!file) return;
+    const audio = document.createElement('audio');
+    audio.preload = 'metadata';
+    audio.onloadedmetadata = () => {
+        URL.revokeObjectURL(audio.src);
+        if (audio.duration > 300) {
+            audioFile.value = '';
+            document.getElementById('audioDuration').value = '';
+            audioStatus.textContent = 'Please choose an audio file that is 5 minutes or shorter.';
+            audioStatus.className = 'small mt-1 text-danger';
+        } else {
+            document.getElementById('audioDuration').value = audio.duration.toFixed(2);
+            audioStatus.textContent = `Audio ready (${Math.ceil(audio.duration / 60)} minute maximum supported).`;
+            audioStatus.className = 'small mt-1 text-success';
+        }
+    };
+    audio.src = URL.createObjectURL(file);
+});
+
+// Clipboard and drag-and-drop image capture
+const pasteZone = document.getElementById('pasteZone');
+const fileInput = document.getElementById('fileInput');
+const pasteStatus = document.getElementById('pasteStatus');
+const pastePreview = document.getElementById('pastePreview');
+
+function attachPastedImage(file) {
+    if (!file || !file.type.startsWith('image/')) {
+        pasteStatus.textContent = "Please paste or drop an image file.";
+        pasteStatus.classList.remove('d-none', 'text-success');
+        pasteStatus.classList.add('text-danger');
+        return;
+    }
+
+    const imageFile = new File([file], `pasted_image_${Date.now()}.png`, {
+        type: file.type || 'image/png'
+    });
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(imageFile);
+    fileInput.files = dataTransfer.files;
+
+    pastePreview.src = URL.createObjectURL(imageFile);
+    pastePreview.classList.remove('d-none');
+    pasteStatus.textContent = "Image attached successfully. Click Extract & Save below.";
+    pasteStatus.classList.remove('d-none', 'text-danger');
+    pasteStatus.classList.add('text-success');
+}
+
+pasteZone?.addEventListener('paste', (event) => {
+    const items = event.clipboardData?.items || [];
+    for (const item of items) {
+        if (item.type.startsWith('image/')) {
+            event.preventDefault();
+            attachPastedImage(item.getAsFile());
+            return;
+        }
+    }
+    pasteStatus.textContent = "The clipboard does not contain an image.";
+    pasteStatus.classList.remove('d-none', 'text-success');
+    pasteStatus.classList.add('text-danger');
+});
+
+pasteZone?.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    pasteZone.classList.add('paste-zone-active');
+});
+
+pasteZone?.addEventListener('dragleave', () => pasteZone.classList.remove('paste-zone-active'));
+
+pasteZone?.addEventListener('drop', (event) => {
+    event.preventDefault();
+    pasteZone.classList.remove('paste-zone-active');
+    attachPastedImage(event.dataTransfer?.files?.[0]);
+});
+
+document.querySelectorAll('.field-toggle').forEach((checkbox) => {
+    const target = document.getElementById(checkbox.dataset.target);
+    const updateVisibility = () => target.classList.toggle('d-none', !checkbox.checked);
+    checkbox.addEventListener('change', updateVisibility);
+    updateVisibility();
+});
+</script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    if (window.lucide) {
+        lucide.createIcons();
+    }
+</script>
 </body>
 </html>
