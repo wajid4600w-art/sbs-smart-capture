@@ -745,8 +745,8 @@
             <h1 class="h4 mb-3">🔐 Secure User Login</h1>
             <form method="POST" action="/login">
                 <div class="mb-3">
-                    <label class="form-label">Email address</label>
-                    <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
+                    <label class="form-label">Username or email</label>
+                    <input type="text" name="identifier" class="form-control" placeholder="username or you@example.com" required>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Password</label>
@@ -766,6 +766,10 @@
             <p class="text-muted small">Your records will be stored separately from other users.</p>
             <form method="POST" action="/register">
                 <div class="mb-3">
+                    <label class="form-label">Username</label>
+                    <input type="text" name="username" class="form-control" placeholder="your username" minlength="3" maxlength="30" required>
+                </div>
+                <div class="mb-3">
                     <label class="form-label">Email address</label>
                     <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
                 </div>
@@ -781,22 +785,6 @@
                 <button type="submit" class="btn btn-primary w-100">Create account</button>
             </form>
             <p class="small text-muted mt-3 mb-0">Already registered? <a href="/login">Log in</a>.</p>
-        </div>
-    </div>
-
-    {% elif page == 'verify' %}
-    <div class="card mx-auto shadow-sm" style="max-width: 460px;">
-        <div class="card-body p-4">
-            <h1 class="h4 mb-2">Verify your email</h1>
-            <p class="text-muted small">Enter the six-digit code sent to <strong>{{ email }}</strong>.</p>
-            <form method="POST" action="/verify">
-                <input type="hidden" name="email" value="{{ email }}">
-                <div class="mb-3">
-                    <label class="form-label">Verification code</label>
-                    <input type="text" name="code" class="form-control text-center" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required>
-                </div>
-                <button type="submit" class="btn btn-primary w-100">Verify email</button>
-            </form>
         </div>
     </div>
 

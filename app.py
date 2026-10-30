@@ -52,6 +52,7 @@ def init_db():
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE,
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL,
@@ -87,6 +88,8 @@ def init_db():
         if "deleted_at" not in columns:
             conn.execute("ALTER TABLE records ADD COLUMN deleted_at TEXT")
         user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "username" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN username TEXT")
         for column, definition in (
             ("is_verified", "INTEGER NOT NULL DEFAULT 0"),
             ("verification_code_hash", "TEXT"),
@@ -96,11 +99,18 @@ def init_db():
         ):
             if column not in user_columns:
                 conn.execute(f"ALTER TABLE users ADD COLUMN {column} {definition}")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL"
+        )
+        conn.execute(
+            "UPDATE users SET username = lower(substr(email, 1, instr(email, '@') - 1)) "
+            "WHERE username IS NULL"
+        )
         user = conn.execute("SELECT id FROM users WHERE email = ?", ("wajid@cydevlab.stream",)).fetchone()
         if not user:
             cur = conn.execute(
-                "INSERT INTO users (email, password_hash, created_at, is_verified) VALUES (?, ?, ?, 1)",
-                ("wajid@cydevlab.stream", generate_password_hash("kau2026"),
+                "INSERT INTO users (username, email, password_hash, created_at, is_verified) VALUES (?, ?, ?, ?, 1)",
+                ("wajid", "wajid@cydevlab.stream", generate_password_hash("kau2026"),
                  datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             )
             user_id = cur.lastrowid
@@ -401,28 +411,31 @@ def analyze_with_gemini(image_path=None, voice_text=None):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        email = request.form.get("email", "").strip().lower()
+        identifier = request.form.get("identifier", "").strip().lower()
         password = request.form.get("password")
         with get_db() as conn:
-            user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+            user = conn.execute(
+                "SELECT * FROM users WHERE email = ? OR username = ?",
+                (identifier, identifier),
+            ).fetchone()
         if user and check_password_hash(user["password_hash"], password):
-            if not user["is_verified"]:
-                flash("Verify your email before logging in.", "warning")
-                return redirect(url_for("verify_email", email=user["email"]))
             session.clear()
             session["user_id"] = user["id"]
             session["user_email"] = user["email"]
             return redirect(url_for("index"))
-        flash("Invalid email or password.", "danger")
+        flash("Invalid username/email or password.", "danger")
     return render_template("index.html", page="login")
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
+        username = request.form.get("username", "").strip().lower()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
-        if "@" not in email or "." not in email.split("@")[-1]:
+        if not re.fullmatch(r"[a-z0-9_][a-z0-9_.-]{2,29}", username):
+            flash("Username must be 3-30 characters using letters, numbers, dots, hyphens, or underscores.", "danger")
+        elif "@" not in email or "." not in email.split("@")[-1]:
             flash("Enter a valid email address.", "danger")
         elif len(password) < 8:
             flash("Password must be at least 8 characters.", "danger")
@@ -430,29 +443,18 @@ def register():
             flash("Passwords do not match.", "danger")
         else:
             try:
-                code = f"{secrets.randbelow(1000000):06d}"
-                expires = (utc_now() + timedelta(minutes=15)).isoformat()
                 with get_db() as conn:
                     conn.execute(
                         """INSERT INTO users
-                        (email, password_hash, created_at, is_verified, verification_code_hash, verification_expires_at)
-                        VALUES (?, ?, ?, 0, ?, ?)""",
-                        (email, generate_password_hash(password),
-                         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                         generate_password_hash(code), expires),
+                        (username, email, password_hash, created_at, is_verified)
+                        VALUES (?, ?, ?, ?, 1)""",
+                        (username, email, generate_password_hash(password),
+                         datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
                     )
-                sent = send_email(
-                    email,
-                    "SBS Smart Capture verification code",
-                    f"Your SBS Smart Capture verification code is {code}.\n\nIt expires in 15 minutes.",
-                )
-                if sent:
-                    flash("Account created. Check your email for the verification code.", "success")
-                else:
-                    flash("Account created, but verification email could not be sent. Configure Gmail SMTP in Render.", "warning")
-                return redirect(url_for("verify_email", email=email))
+                flash("Account created. You can now log in with your username or email.", "success")
+                return redirect(url_for("login"))
             except sqlite3.IntegrityError:
-                flash("An account with that email already exists.", "warning")
+                flash("That username or email is already in use.", "warning")
     return render_template("index.html", page="register")
 
 @app.route("/verify", methods=["GET", "POST"])
