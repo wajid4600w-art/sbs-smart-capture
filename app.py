@@ -30,8 +30,7 @@ load_dotenv()
 app = Flask(__name__, template_folder="template")
 app.secret_key = os.environ.get("SECRET_KEY", "cpit251-sbs-secret-key-2026")
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
-# Temporarily disabled for testing. Set to True later to restore login and TOTP.
-AUTHENTICATION_ENABLED = False
+AUTHENTICATION_ENABLED = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() == "true"
@@ -446,7 +445,7 @@ def analyze_with_gemini(image_path=None, voice_text=None, image_bytes=None):
         if voice_text:
             contents.append(f"Input Text/Voice Transcript: {voice_text}")
 
-        model = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
+        model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
         retry_delays = (2, 5)
         for attempt in range(3):
             try:
@@ -963,8 +962,8 @@ def add_record():
         ))
         new_id = cur.lastrowid
 
-    flash("Record processed & saved to structured .TXT file! You can review or edit below.", "success")
-    return redirect(url_for("view_record", id=new_id))
+    flash("Record processed and saved successfully.", "success")
+    return redirect(url_for("index"))
 
 @app.route("/records/view")
 def view_record():
