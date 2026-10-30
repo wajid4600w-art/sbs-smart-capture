@@ -27,36 +27,6 @@
             color: var(--sbs-ink);
         }
 
-        body[data-theme="dark"] {
-            --sbs-background: #121212;
-            --sbs-surface: #1f1f1f;
-            --sbs-ink: #f3f4f6;
-            --sbs-muted: #b7beca;
-        }
-        body[data-theme="gold-black"] {
-            --sbs-background: #16120a;
-            --sbs-surface: #211b0d;
-            --sbs-ink: #fff3c4;
-            --sbs-muted: #d7c58c;
-            --sbs-primary: #d6a928;
-        }
-        body[data-theme="red-black"] {
-            --sbs-background: #160b0d;
-            --sbs-surface: #241114;
-            --sbs-ink: #ffe8eb;
-            --sbs-muted: #d9aeb5;
-            --sbs-primary: #e04455;
-        }
-        body[data-theme] .card,
-        body[data-theme] .capture-section {
-            background-color: var(--sbs-surface);
-            color: var(--sbs-ink);
-        }
-        body[data-theme] .text-muted,
-        body[data-theme] .form-text {
-            color: var(--sbs-muted) !important;
-        }
-
         html {
             scroll-behavior: smooth;
         }
@@ -903,7 +873,8 @@
                         <input type="hidden" name="action" value="profile">
                         <div class="mb-3"><label class="form-label">Username</label><input class="form-control" name="username" value="{{ user['username'] }}" required></div>
                         <div class="mb-3"><label class="form-label">Email address</label><input class="form-control" type="email" name="email" value="{{ user['email'] }}" required></div>
-                        <div class="mb-3"><label class="form-label">Current password</label><input class="form-control" type="password" name="current_password" required></div>
+                        <div class="mb-3"><label class="form-label">Current password <span class="text-muted">(or authenticator code)</span></label><input class="form-control" type="password" name="current_password"></div>
+                        <div class="mb-3"><label class="form-label">Authenticator code</label><input class="form-control" name="authenticator_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"></div>
                         <button class="btn btn-primary" type="submit">Save profile</button>
                     </form>
                 </div>
@@ -913,7 +884,8 @@
                     <h2 class="h5">Change password</h2>
                     <form method="POST" action="/settings">
                         <input type="hidden" name="action" value="password">
-                        <div class="mb-3"><label class="form-label">Current password</label><input class="form-control" type="password" name="current_password" required></div>
+                        <div class="mb-3"><label class="form-label">Current password <span class="text-muted">(or authenticator code)</span></label><input class="form-control" type="password" name="current_password"></div>
+                        <div class="mb-3"><label class="form-label">Authenticator code</label><input class="form-control" name="authenticator_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"></div>
                         <div class="mb-3"><label class="form-label">New password</label><input class="form-control" type="password" name="new_password" minlength="8" required></div>
                         <div class="mb-3"><label class="form-label">Confirm new password</label><input class="form-control" type="password" name="confirm_password" minlength="8" required></div>
                         <button class="btn btn-primary" type="submit">Change password</button>
@@ -927,7 +899,8 @@
                     {% if not qr_image %}
                     <form method="POST" action="/settings">
                         <input type="hidden" name="action" value="authenticator_start">
-                        <div class="mb-3"><label class="form-label">Current password</label><input class="form-control" type="password" name="current_password" required></div>
+                        <div class="mb-3"><label class="form-label">Current password <span class="text-muted">(or authenticator code)</span></label><input class="form-control" type="password" name="current_password"></div>
+                        <div class="mb-3"><label class="form-label">Authenticator code</label><input class="form-control" name="authenticator_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"></div>
                         <button class="btn btn-warning" type="submit">Generate new QR code</button>
                     </form>
                     {% else %}
@@ -945,12 +918,8 @@
         <div class="col-lg-5">
             <div class="card shadow-sm">
                 <div class="card-body p-4">
-                    <h2 class="h5">Appearance and language</h2>
+                    <h2 class="h5">Language and font</h2>
                     <p class="text-muted">These preferences are saved in this browser.</p>
-                    <label class="form-label">Theme</label>
-                    <select id="themeSelect" class="form-select mb-3">
-                        <option value="light">Light</option><option value="dark">Dark</option><option value="gold-black">Gold and black</option><option value="red-black">Red and black</option>
-                    </select>
                     <label class="form-label">Font</label>
                     <select id="fontSelect" class="form-select mb-3">
                         <option value="Inter, system-ui, -apple-system, 'Segoe UI', sans-serif">Modern system</option>
@@ -1635,7 +1604,6 @@ document.querySelectorAll('.field-toggle').forEach((checkbox) => {
 </script>
 <script>
 const appearance = {
-    theme: localStorage.getItem('sbs-theme') || 'light',
     font: localStorage.getItem('sbs-font') || "Inter, system-ui, -apple-system, 'Segoe UI', sans-serif",
     language: localStorage.getItem('sbs-language') || 'en'
 };
@@ -1647,10 +1615,76 @@ const arabicLabels = {
     'Settings': 'الإعدادات',
     'Logout': 'تسجيل الخروج',
     'Login': 'تسجيل الدخول',
-    'Create account': 'إنشاء حساب'
+    'Create account': 'إنشاء حساب',
+    'Language and font': 'اللغة والخط',
+    'Font': 'الخط',
+    'Page language': 'لغة الصفحة',
+    'English': 'الإنجليزية',
+    'Arabic': 'العربية',
+    'Profile settings': 'إعدادات الملف الشخصي',
+    'Change password': 'تغيير كلمة المرور',
+    'Authenticator app': 'تطبيق المصادقة',
+    'Generate new QR code': 'إنشاء رمز QR جديد',
+    'Confirm new authenticator': 'تأكيد تطبيق المصادقة الجديد',
+    'Save profile': 'حفظ الملف الشخصي',
+    'Change password': 'تغيير كلمة المرور',
+    'Capture once. Get organized instantly.': 'التقط مرة واحدة ونظّم بياناتك فوراً.',
+    'Start capturing': 'ابدأ الالتقاط',
+    'Explore record library': 'استعراض مكتبة السجلات',
+    'Create an audio record': 'إنشاء سجل صوتي',
+    'Audio file': 'ملف صوتي',
+    'Save audio record & review': 'حفظ السجل الصوتي ومراجعته',
+    'Records library': 'مكتبة السجلات',
+    'Search': 'بحث',
+    'Export': 'تصدير',
+    'Delete': 'حذف',
+    'Restore': 'استعادة',
+    'Save edits': 'حفظ التعديلات',
+    'Download audio': 'تنزيل الصوت',
+    'Need more help?': 'هل تحتاج إلى مزيد من المساعدة؟',
+    'Helpful shortcuts': 'اختصارات مفيدة',
+    'Quick troubleshooting': 'استكشاف الأخطاء وإصلاحها'
 };
+const arabicText = {
+    'AI-powered record workspace': 'مساحة عمل للسجلات مدعومة بالذكاء الاصطناعي',
+    'Smart extraction · Secure storage · Easy export': 'استخراج ذكي · تخزين آمن · تصدير سهل',
+    'Use visual capture for documents and audio capture for voice notes. SBS structures each submission so it can be reviewed and exported from the Records page.': 'استخدم الالتقاط المرئي للمستندات والالتقاط الصوتي للملاحظات. ينظم النظام كل إدخال ليتم مراجعته وتصديره من صفحة السجلات.',
+    'Add an audio note up to five minutes, then save it as a structured record.': 'أضف ملاحظة صوتية تصل إلى خمس دقائق، ثم احفظها كسجل منظم.',
+    'MP3, WAV, M4A, WEBM, or OGG · maximum 5 minutes.': 'MP3 أو WAV أو M4A أو WEBM أو OGG · بحد أقصى 5 دقائق.',
+    'Profile settings': 'إعدادات الملف الشخصي',
+    'Your current password is required.': 'يجب إدخال كلمة المرور الحالية.',
+    'Current password': 'كلمة المرور الحالية',
+    'New password': 'كلمة المرور الجديدة',
+    'Confirm new password': 'تأكيد كلمة المرور الجديدة',
+    'Username': 'اسم المستخدم',
+    'Email address': 'البريد الإلكتروني',
+    'Language and font': 'اللغة والخط',
+    'These preferences are saved in this browser.': 'يتم حفظ هذه التفضيلات في هذا المتصفح.'
+};
+function translateInterface() {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach((node) => {
+        if (!node.__originalText) node.__originalText = node.nodeValue;
+        const value = node.__originalText.trim();
+        if (!value) return;
+        if (appearance.language === 'ar') {
+            const translated = arabicLabels[value] || arabicText[value];
+            if (translated) node.nodeValue = node.__originalText.replace(value, translated);
+        } else {
+            node.nodeValue = node.__originalText;
+        }
+    });
+    document.querySelectorAll('input[placeholder], textarea[placeholder]').forEach((element) => {
+        if (!element.dataset.originalPlaceholder) element.dataset.originalPlaceholder = element.placeholder;
+        const translated = arabicLabels[element.dataset.originalPlaceholder] || arabicText[element.dataset.originalPlaceholder];
+        element.placeholder = appearance.language === 'ar' && translated
+            ? translated
+            : element.dataset.originalPlaceholder;
+    });
+}
 function applyAppearance() {
-    document.body.dataset.theme = appearance.theme;
     document.documentElement.style.setProperty('--sbs-font', appearance.font);
     document.documentElement.lang = appearance.language;
     document.documentElement.dir = appearance.language === 'ar' ? 'rtl' : 'ltr';
@@ -1660,18 +1694,12 @@ function applyAppearance() {
         if (appearance.language === 'ar' && arabicLabels[english]) element.textContent = arabicLabels[english];
         else if (appearance.language === 'en') element.textContent = english;
     });
-    const themeSelect = document.getElementById('themeSelect');
     const fontSelect = document.getElementById('fontSelect');
     const languageSelect = document.getElementById('languageSelect');
-    if (themeSelect) themeSelect.value = appearance.theme;
     if (fontSelect) fontSelect.value = appearance.font;
     if (languageSelect) languageSelect.value = appearance.language;
+    translateInterface();
 }
-document.getElementById('themeSelect')?.addEventListener('change', (event) => {
-    appearance.theme = event.target.value;
-    localStorage.setItem('sbs-theme', appearance.theme);
-    applyAppearance();
-});
 document.getElementById('fontSelect')?.addEventListener('change', (event) => {
     appearance.font = event.target.value;
     localStorage.setItem('sbs-font', appearance.font);
