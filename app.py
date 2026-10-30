@@ -48,7 +48,7 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "txt", "mp3", "wav", "m4a", 
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 AUDIO_EXTENSIONS = {"mp3", "wav", "m4a", "webm", "ogg"}
 MAX_GEMINI_IMAGE_BYTES = 14 * 1024 * 1024
-MAX_IMAGE_PIXELS = 25_000_000
+MAX_IMAGE_PIXELS = 8_000_000
 
 # Default Admin User (Hashed password for Rubric Section 2c Security)
 ADMIN_USER = "wajid"
@@ -865,6 +865,7 @@ def add_record():
         else:
             try:
                 normalized_image, _ = normalize_image_for_gemini(raw_image)
+                del raw_image
                 img_filename = secure_filename(f"scan_{int(datetime.now().timestamp())}.jpg")
                 img_path = os.path.join(UPLOAD_FOLDER, img_filename)
                 with open(img_path, "wb") as image_file:
