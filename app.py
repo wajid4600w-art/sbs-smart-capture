@@ -962,8 +962,8 @@ def add_record():
         ))
         new_id = cur.lastrowid
 
-    flash("Record processed and saved successfully.", "success")
-    return redirect(url_for("index"))
+    flash("Record processed and saved successfully. Review or edit it below.", "success")
+    return redirect(url_for("view_record", id=new_id))
 
 @app.route("/records/view")
 def view_record():
