@@ -1449,7 +1449,7 @@ const fileInput = document.getElementById('fileInput');
 const pasteStatus = document.getElementById('pasteStatus');
 const pastePreview = document.getElementById('pastePreview');
 
-function attachPastedImage(file) {
+async function attachPastedImage(file) {
     if (!file || !file.type.startsWith('image/')) {
         pasteStatus.textContent = "Please paste or drop an image file.";
         pasteStatus.classList.remove('d-none', 'text-success');
@@ -1457,9 +1457,23 @@ function attachPastedImage(file) {
         return;
     }
 
-    const imageFile = new File([file], `pasted_image_${Date.now()}.png`, {
-        type: file.type || 'image/png'
-    });
+    let imageFile;
+    try {
+        const bitmap = await createImageBitmap(file);
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0);
+        const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+        bitmap.close();
+        if (!pngBlob) throw new Error('PNG conversion failed');
+        imageFile = new File([pngBlob], `pasted_image_${Date.now()}.png`, { type: 'image/png' });
+    } catch (error) {
+        pasteStatus.textContent = "The pasted image could not be read. Try saving it as PNG or JPEG first.";
+        pasteStatus.classList.remove('d-none', 'text-success');
+        pasteStatus.classList.add('text-danger');
+        return;
+    }
     const dataTransfer = new DataTransfer();
     dataTransfer.items.add(imageFile);
     fileInput.files = dataTransfer.files;

@@ -41,6 +41,7 @@ os.makedirs(TXT_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "txt", "mp3", "wav", "m4a", "webm", "ogg"}
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 AUDIO_EXTENSIONS = {"mp3", "wav", "m4a", "webm", "ogg"}
+MAX_GEMINI_IMAGE_BYTES = 14 * 1024 * 1024
 
 # Default Admin User (Hashed password for Rubric Section 2c Security)
 ADMIN_USER = "wajid"
@@ -50,6 +51,30 @@ def get_db():
     conn = sqlite3.connect("sbs_records.db")
     conn.row_factory = sqlite3.Row
     return conn
+
+def normalize_image_for_gemini(image_bytes):
+    """Validate an image and return compact JPEG bytes with a matching MIME type."""
+    if not image_bytes:
+        raise ValueError("The uploaded image is empty.")
+    if len(image_bytes) > MAX_GEMINI_IMAGE_BYTES * 2:
+        raise ValueError("The uploaded image is too large. Please use an image under 28 MB.")
+    try:
+        image = Image.open(io.BytesIO(image_bytes))
+        image.load()
+    except (OSError, ValueError, Image.DecompressionBombError) as exc:
+        raise ValueError("The uploaded image is corrupt or unsupported.") from exc
+
+    image.thumbnail((4096, 4096), Image.Resampling.LANCZOS)
+    if image.mode not in ("RGB", "L"):
+        image = image.convert("RGB")
+
+    for quality in (90, 78, 65, 50):
+        output = io.BytesIO()
+        image.save(output, format="JPEG", quality=quality, optimize=True)
+        normalized = output.getvalue()
+        if len(normalized) <= MAX_GEMINI_IMAGE_BYTES:
+            return normalized, "image/jpeg"
+    raise ValueError("The uploaded image is too large to process. Please use a smaller image.")
 
 def init_db():
     with get_db() as conn:
@@ -375,25 +400,7 @@ def analyze_with_gemini(image_path=None, voice_text=None):
         if image_path and os.path.exists(image_path):
             with open(image_path, "rb") as f:
                 img_bytes = f.read()
-            try:
-                image = Image.open(io.BytesIO(img_bytes))
-                image.load()
-                if image.mode not in ("RGB", "L"):
-                    image = image.convert("RGB")
-                normalized = io.BytesIO()
-                image.save(normalized, format="JPEG", quality=92, optimize=True)
-                img_bytes = normalized.getvalue()
-                mime = "image/jpeg"
-            except (OSError, ValueError):
-                extension = os.path.splitext(image_path)[1].lower()
-                mime = {
-                    ".png": "image/png",
-                    ".jpg": "image/jpeg",
-                    ".jpeg": "image/jpeg",
-                    ".webp": "image/webp",
-                }.get(extension)
-                if not mime:
-                    raise ValueError("Unsupported or unreadable image format")
+            img_bytes, mime = normalize_image_for_gemini(img_bytes)
             contents.append(types.Part.from_bytes(data=img_bytes, mime_type=mime))
         if voice_text:
             contents.append(f"Input Text/Voice Transcript: {voice_text}")
@@ -810,6 +817,10 @@ def add_record():
     audio_filename = ""
     uploaded_name = ""
 
+    if file and file.filename and not allowed_file(file.filename):
+        flash("Unsupported upload type. Use PNG, JPEG, WebP, or TXT.", "danger")
+        return redirect(url_for("index"))
+
     if file and file.filename and allowed_file(file.filename):
         uploaded_name = filename_stem(file.filename)
         ext = file.filename.rsplit(".", 1)[1].lower()
@@ -824,6 +835,15 @@ def add_record():
             os.remove(img_path)
             img_filename = ""
             img_path = None
+        else:
+            try:
+                with open(img_path, "rb") as image_file:
+                    normalize_image_for_gemini(image_file.read())
+            except ValueError as exc:
+                if os.path.exists(img_path):
+                    os.remove(img_path)
+                flash(str(exc), "danger")
+                return redirect(url_for("index"))
 
     if audio_file and audio_file.filename:
         audio_ext = audio_file.filename.rsplit(".", 1)[-1].lower()
