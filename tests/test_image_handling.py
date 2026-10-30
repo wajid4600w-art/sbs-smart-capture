@@ -90,3 +90,38 @@ def test_gemini_receives_already_normalized_bytes_without_second_normalization(m
 
     assert result["name"] == "Test"
     assert len(calls) == 1
+
+
+def test_gemini_receives_audio_bytes_with_audio_mime(monkeypatch):
+    import app
+
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(kwargs["contents"])
+            return type(
+                "Response",
+                (),
+                {
+                    "text": (
+                        '{"record_type":"Meeting Notes","name":"Meeting","shop":"N/A",'
+                        '"doc_date":"2026-10-30","items":"N/A","total_amount":"N/A",'
+                        '"plain_text":"Discussed next steps"}'
+                    )
+                },
+            )()
+
+    class FakeClient:
+        models = FakeModels()
+
+    monkeypatch.setattr(app.genai, "Client", lambda api_key: FakeClient())
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+    result = app.analyze_with_gemini(
+        audio_bytes=b"audio bytes",
+        audio_mime="audio/mpeg",
+    )
+
+    assert result["record_type"] == "Meeting Notes"
+    assert len(calls[0]) == 2

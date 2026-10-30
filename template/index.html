@@ -720,7 +720,7 @@
             {% if not authentication_enabled %}
                 <span class="badge bg-success">Demo mode</span>
             {% elif session.get('user_id') %}
-                <span class="badge bg-success">Logged in: {{ session.get('user_email') }}</span>
+                <span class="badge bg-success">Logged in: {{ session.get('username') or session.get('user_email') }}</span>
                 <a href="/logout" class="btn btn-danger btn-sm">Logout</a>
             {% else %}
                 <a href="/login" class="btn btn-warning btn-sm">Login</a>
