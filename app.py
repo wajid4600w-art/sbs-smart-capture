@@ -416,18 +416,43 @@ def analyze_with_gemini(
     audio_bytes=None,
     audio_mime=None,
 ):
-    """Calls Gemini API to categorize into Receipt/Purchase OR General Document."""
+    """Use Gemini to extract structured receipt data from images, audio, or text."""
     api_key = os.environ.get("GEMINI_API_KEY", "")
     today = datetime.now().strftime("%Y-%m-%d")
 
     prompt = f"""
-    Analyze this input carefully.
+    Analyze the image, audio, and/or text carefully and return accurate structured data.
     CRITERIA:
-    1. If it relates to a purchase, receipt, invoice, or expense:
-       Set "record_type" to "Purchase/Receipt". Extract the "name" (summary title), "shop" (store/merchant name), "doc_date" (YYYY-MM-DD, default {today}), "items" (formatted as 'Item | Qty | Price' per line), "total_amount", and "plain_text" (any extra notes).
-    2. If it is NOT related to a purchase/shop:
-       Set "record_type" to "General Document". Set "shop" to "N/A", "items" to "N/A", "total_amount" to "N/A", and extract "name" (title/subject), "doc_date" ({today}), and put all full document information into "plain_text".
-    3. If audio is provided, transcribe its meaningful content into "plain_text" and classify it as a useful category such as "Voice Record", "Reminder", "Meeting Notes", "Task", "Shopping List", or "General Audio". If it contains a purchase or expense, use "Purchase/Receipt".
+    1. Treat spoken or written purchase descriptions as receipts, even when there is no
+       photographed receipt. For example, "I bought a controller for 10 dollars and
+       chocolate for 5 riyals" MUST be classified as "Purchase/Receipt".
+    2. For a purchase, set "record_type" to "Purchase/Receipt". Extract the "name"
+       (short summary), "shop" (merchant if known, otherwise "N/A"), and "doc_date"
+       (YYYY-MM-DD, default {today}).
+    3. Extract every purchased item separately. The "items" value must contain one
+       item per line in exactly this format: "Item | Qty | Price in SAR".
+       Correctly interpret natural speech and minor transcription errors. Use quantity 1
+       when no quantity is stated. Preserve the item's normal name rather than repeating
+       the whole sentence.
+    4. Convert all foreign currencies into Saudi riyals (SAR) and show each item price
+       in SAR. Use your best current currency-rate knowledge at the time of analysis,
+       or a rate explicitly stated in the input. Do not use a fixed application-side
+       conversion table. Saudi riyal, SAR, and ريال are already SAR. Do not add
+       foreign amounts to the final total without conversion.
+    5. Calculate "total_amount" by summing quantity × converted unit price for every
+       extracted item. Return the final total in the format "0.00 SAR". Check the
+       arithmetic before responding. If the example above is provided, the result must
+       be "Controller | 1 | 37.50 SAR\\nChocolate | 1 | 5.00 SAR" and "42.50 SAR"
+       when the current USD/SAR rate is 3.75.
+    6. Put the full transcription or OCR text, original currencies and amounts,
+       conversion rates used, rate date or "rate date unavailable", and the arithmetic
+       explanation in "plain_text". Gemini is responsible for the extraction,
+       conversion, categorization, and calculation; the Flask application must store
+       the returned values without recalculating or replacing them.
+    7. If it is not related to a purchase/shop, set "record_type" to an appropriate
+       category such as "Voice Record", "Reminder", "Meeting Notes", "Task",
+       "Shopping List", or "General Audio". Set "shop", "items", and "total_amount"
+       to "N/A" unless the content includes an actual purchase or expense.
 
     Return ONLY valid JSON with keys:
     "record_type", "name", "shop", "doc_date", "items", "total_amount", "plain_text"
@@ -585,6 +610,78 @@ def two_factor():
             return redirect(url_for("index"))
         flash("That authenticator code is invalid. Try again.", "danger")
     return render_template("index.html", page="2fa", email=user["email"])
+
+@app.route("/settings", methods=["GET", "POST"])
+def settings():
+    auth_redirect = require_login()
+    if auth_redirect:
+        return auth_redirect
+    user_id = current_user_id()
+    pending_secret = session.get("settings_totp_secret")
+    if request.method == "POST":
+        action = request.form.get("action", "")
+        with get_db() as conn:
+            user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            if not user:
+                session.clear()
+                return redirect(url_for("login"))
+            if action in {"profile", "password", "authenticator_start"}:
+                current_password = request.form.get("current_password", "")
+                if not check_password_hash(user["password_hash"], current_password):
+                    flash("Your current password is incorrect.", "danger")
+                    return redirect(url_for("settings"))
+            if action == "profile":
+                username = request.form.get("username", "").strip().lower()
+                email = request.form.get("email", "").strip().lower()
+                if not re.fullmatch(r"[a-z0-9_][a-z0-9_.-]{2,29}", username):
+                    flash("Username must be 3-30 characters using letters, numbers, dots, hyphens, or underscores.", "danger")
+                elif "@" not in email or "." not in email.split("@")[-1]:
+                    flash("Enter a valid email address.", "danger")
+                else:
+                    try:
+                        conn.execute("UPDATE users SET username = ?, email = ? WHERE id = ?", (username, email, user_id))
+                        session["username"] = username
+                        session["user_email"] = email
+                        flash("Profile updated successfully.", "success")
+                    except sqlite3.IntegrityError:
+                        flash("That username or email is already in use.", "warning")
+            elif action == "password":
+                new_password = request.form.get("new_password", "")
+                confirm_password = request.form.get("confirm_password", "")
+                if len(new_password) < 8:
+                    flash("The new password must be at least 8 characters.", "danger")
+                elif new_password != confirm_password:
+                    flash("The new passwords do not match.", "danger")
+                else:
+                    conn.execute(
+                        "UPDATE users SET password_hash = ? WHERE id = ?",
+                        (generate_password_hash(new_password), user_id),
+                    )
+                    flash("Password changed successfully.", "success")
+            elif action == "authenticator_start":
+                session["settings_totp_secret"] = pyotp.random_base32()
+                flash("Scan the new QR code, then confirm it with your authenticator code.", "info")
+            elif action == "authenticator_confirm":
+                code = request.form.get("code", "").strip()
+                if not pending_secret or not pyotp.TOTP(pending_secret).verify(code, valid_window=1):
+                    flash("That authenticator code is invalid. The new authenticator was not saved.", "danger")
+                else:
+                    conn.execute("UPDATE users SET totp_secret = ? WHERE id = ?", (pending_secret, user_id))
+                    session.pop("settings_totp_secret", None)
+                    flash("Authenticator app was reset successfully.", "success")
+        return redirect(url_for("settings"))
+    with get_db() as conn:
+        user = conn.execute("SELECT username, email, totp_secret FROM users WHERE id = ?", (user_id,)).fetchone()
+    qr_image = None
+    if pending_secret:
+        uri = pyotp.TOTP(pending_secret).provisioning_uri(
+            name=user["email"], issuer_name="SBS Smart Capture"
+        )
+        qr = qrcode.make(uri)
+        qr_buffer = io.BytesIO()
+        qr.save(qr_buffer, format="PNG")
+        qr_image = base64.b64encode(qr_buffer.getvalue()).decode("ascii")
+    return render_template("index.html", page="settings", user=user, qr_image=qr_image, has_authenticator=bool(user["totp_secret"]))
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
