@@ -27,10 +27,15 @@ load_dotenv()
 
 app = Flask(__name__, template_folder="template")
 app.secret_key = os.environ.get("SECRET_KEY", "cpit251-sbs-secret-key-2026")
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() == "true"
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    flash("The upload is too large. Images and audio files must be 20 MB or smaller.", "danger")
+    return redirect(url_for("index"))
 
 # Folders for storing uploaded images and structured .txt files
 UPLOAD_FOLDER = "uploads"
@@ -48,7 +53,9 @@ ADMIN_USER = "wajid"
 ADMIN_HASH = generate_password_hash("kau2026")
 
 def get_db():
-    conn = sqlite3.connect("sbs_records.db")
+    conn = sqlite3.connect("sbs_records.db", timeout=10)
+    conn.execute("PRAGMA busy_timeout = 10000")
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -75,6 +82,10 @@ def normalize_image_for_gemini(image_bytes):
         if len(normalized) <= MAX_GEMINI_IMAGE_BYTES:
             return normalized, "image/jpeg"
     raise ValueError("The uploaded image is too large to process. Please use a smaller image.")
+
+def is_transient_gemini_error(error):
+    message = str(error).upper()
+    return any(marker in message for marker in ("429", "500", "502", "503", "504", "TIMEOUT"))
 
 def init_db():
     with get_db() as conn:
@@ -421,8 +432,8 @@ def analyze_with_gemini(image_path=None, voice_text=None):
                 if not required.issubset(parsed):
                     raise ValueError("Gemini response omitted required record fields")
                 return parsed
-            except Exception:
-                if attempt == 1:
+            except Exception as exc:
+                if attempt == 1 or not is_transient_gemini_error(exc):
                     raise
         raise RuntimeError("Gemini extraction did not return a result")
     except Exception as e:
@@ -824,24 +835,26 @@ def add_record():
     if file and file.filename and allowed_file(file.filename):
         uploaded_name = filename_stem(file.filename)
         ext = file.filename.rsplit(".", 1)[1].lower()
-        img_filename = secure_filename(f"scan_{int(datetime.now().timestamp())}.{ext}")
-        img_path = os.path.join(UPLOAD_FOLDER, img_filename)
-        file.save(img_path)
+        raw_image = file.read()
         if ext == "txt":
+            img_filename = secure_filename(f"scan_{int(datetime.now().timestamp())}.txt")
+            img_path = os.path.join(UPLOAD_FOLDER, img_filename)
+            with open(img_path, "wb") as saved_file:
+                saved_file.write(raw_image)
             with open(img_path, "r", encoding="utf-8", errors="ignore") as f:
                 voice_text = f.read()
             img_path = None
         elif ext not in IMAGE_EXTENSIONS:
-            os.remove(img_path)
             img_filename = ""
             img_path = None
         else:
             try:
-                with open(img_path, "rb") as image_file:
-                    normalize_image_for_gemini(image_file.read())
+                normalized_image, _ = normalize_image_for_gemini(raw_image)
+                img_filename = secure_filename(f"scan_{int(datetime.now().timestamp())}.jpg")
+                img_path = os.path.join(UPLOAD_FOLDER, img_filename)
+                with open(img_path, "wb") as image_file:
+                    image_file.write(normalized_image)
             except ValueError as exc:
-                if os.path.exists(img_path):
-                    os.remove(img_path)
                 flash(str(exc), "danger")
                 return redirect(url_for("index"))
 
@@ -856,6 +869,9 @@ def add_record():
             audio_duration = 0
         if audio_duration > 300:
             flash("Audio recordings must be five minutes or shorter.", "danger")
+            return redirect(url_for("index"))
+        if audio_file.content_length and audio_file.content_length > 20 * 1024 * 1024:
+            flash("Audio files must be 20 MB or smaller.", "danger")
             return redirect(url_for("index"))
         audio_filename = secure_filename(f"audio_{int(datetime.now().timestamp())}.{audio_ext}")
         audio_file.save(os.path.join(UPLOAD_FOLDER, audio_filename))
