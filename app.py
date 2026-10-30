@@ -2,6 +2,7 @@ import os
 import json
 import csv
 import io
+import base64
 import re
 import secrets
 import smtplib
@@ -18,6 +19,8 @@ from google.genai import types
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+import pyotp
+import qrcode
 
 load_dotenv()
 
@@ -55,6 +58,7 @@ def init_db():
                 username TEXT UNIQUE,
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
+                totp_secret TEXT,
                 created_at TEXT NOT NULL,
                 is_verified INTEGER NOT NULL DEFAULT 0,
                 verification_code_hash TEXT,
@@ -90,6 +94,8 @@ def init_db():
         user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
         if "username" not in user_columns:
             conn.execute("ALTER TABLE users ADD COLUMN username TEXT")
+        if "totp_secret" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT")
         for column, definition in (
             ("is_verified", "INTEGER NOT NULL DEFAULT 0"),
             ("verification_code_hash", "TEXT"),
@@ -420,11 +426,64 @@ def login():
             ).fetchone()
         if user and check_password_hash(user["password_hash"], password):
             session.clear()
-            session["user_id"] = user["id"]
-            session["user_email"] = user["email"]
-            return redirect(url_for("index"))
+            session["pending_2fa_user_id"] = user["id"]
+            if user["totp_secret"]:
+                return redirect(url_for("two_factor"))
+            return redirect(url_for("two_factor_setup"))
         flash("Invalid username/email or password.", "danger")
     return render_template("index.html", page="login")
+
+@app.route("/2fa/setup", methods=["GET", "POST"])
+def two_factor_setup():
+    user_id = session.get("pending_2fa_user_id")
+    if not user_id:
+        return redirect(url_for("login"))
+    with get_db() as conn:
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        session.clear()
+        return redirect(url_for("login"))
+    secret = user["totp_secret"] or pyotp.random_base32()
+    if request.method == "POST":
+        code = request.form.get("code", "").strip()
+        if pyotp.TOTP(secret).verify(code, valid_window=1):
+            with get_db() as conn:
+                conn.execute("UPDATE users SET totp_secret=? WHERE id=?", (secret, user_id))
+            session.clear()
+            session["user_id"] = user["id"]
+            session["user_email"] = user["email"]
+            session["username"] = user["username"]
+            return redirect(url_for("index"))
+        flash("That authenticator code is invalid. Try again.", "danger")
+    uri = pyotp.TOTP(secret).provisioning_uri(
+        name=user["email"],
+        issuer_name="SBS Smart Capture",
+    )
+    qr = qrcode.make(uri)
+    qr_buffer = io.BytesIO()
+    qr.save(qr_buffer, format="PNG")
+    qr_image = base64.b64encode(qr_buffer.getvalue()).decode("ascii")
+    return render_template("index.html", page="2fa_setup", email=user["email"], secret=secret, qr_image=qr_image)
+
+@app.route("/2fa", methods=["GET", "POST"])
+def two_factor():
+    user_id = session.get("pending_2fa_user_id")
+    if not user_id:
+        return redirect(url_for("login"))
+    with get_db() as conn:
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user or not user["totp_secret"]:
+        return redirect(url_for("two_factor_setup"))
+    if request.method == "POST":
+        code = request.form.get("code", "").strip()
+        if pyotp.TOTP(user["totp_secret"]).verify(code, valid_window=1):
+            session.clear()
+            session["user_id"] = user["id"]
+            session["user_email"] = user["email"]
+            session["username"] = user["username"]
+            return redirect(url_for("index"))
+        flash("That authenticator code is invalid. Try again.", "danger")
+    return render_template("index.html", page="2fa", email=user["email"])
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
