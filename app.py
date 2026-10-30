@@ -443,7 +443,10 @@ def two_factor_setup():
     if not user:
         session.clear()
         return redirect(url_for("login"))
-    secret = user["totp_secret"] or pyotp.random_base32()
+    secret = user["totp_secret"] or session.get("pending_2fa_secret")
+    if not secret:
+        secret = pyotp.random_base32()
+        session["pending_2fa_secret"] = secret
     if request.method == "POST":
         code = request.form.get("code", "").strip()
         if pyotp.TOTP(secret).verify(code, valid_window=1):
