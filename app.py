@@ -323,6 +323,7 @@ def analyze_with_gemini(image_path=None, voice_text=None):
         )
         return json.loads(response.text)
     except Exception as e:
+        app.logger.warning("Gemini extraction unavailable: %s", e)
         return {
             "record_type": "General Document",
             "name": "Manual Review Needed",
@@ -330,7 +331,10 @@ def analyze_with_gemini(image_path=None, voice_text=None):
             "doc_date": today,
             "items": "N/A",
             "total_amount": "N/A",
-            "plain_text": f"Raw Input: {voice_text or 'Image uploaded'}. (Note: {str(e)})"
+            "plain_text": (
+                f"Raw Input: {voice_text or 'Image uploaded'}. "
+                "Automatic extraction was temporarily unavailable; please review and complete the fields manually."
+            )
         }
 
 @app.route("/login", methods=["GET", "POST"])
@@ -685,7 +689,7 @@ def edit_record():
               current_user_id(), rec_id))
 
     flash("Record and structured .TXT file updated!", "success")
-    return redirect(url_for("view_record", id=rec_id))
+    return redirect(url_for("records_page"))
 
 @app.route("/records/delete", methods=["POST"])
 def delete_record():
