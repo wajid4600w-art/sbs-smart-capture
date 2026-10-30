@@ -7,6 +7,7 @@ import re
 import secrets
 import smtplib
 import sqlite3
+import time
 import warnings
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -446,7 +447,8 @@ def analyze_with_gemini(image_path=None, voice_text=None, image_bytes=None):
             contents.append(f"Input Text/Voice Transcript: {voice_text}")
 
         model = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
-        for attempt in range(2):
+        retry_delays = (2, 5)
+        for attempt in range(3):
             try:
                 response = client.models.generate_content(
                     model=model,
@@ -462,8 +464,9 @@ def analyze_with_gemini(image_path=None, voice_text=None, image_bytes=None):
                     raise ValueError("Gemini response omitted required record fields")
                 return parsed
             except Exception as exc:
-                if attempt == 1 or not is_transient_gemini_error(exc):
+                if attempt >= 2 or not is_transient_gemini_error(exc):
                     raise
+                time.sleep(retry_delays[attempt])
         raise RuntimeError("Gemini extraction did not return a result")
     except Exception as e:
         app.logger.warning("Gemini extraction unavailable: %s", e)
