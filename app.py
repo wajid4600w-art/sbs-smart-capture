@@ -597,11 +597,17 @@ def logout():
 @app.route("/")
 @app.route("/records/search")
 def index():
-    auth_redirect = require_login()
-    if auth_redirect:
-        return auth_redirect
-    purge_expired_trash()
     user_id = current_user_id()
+    if not user_id:
+        return render_template(
+            "index.html",
+            page="dashboard",
+            records=[],
+            total_records=0,
+            purchase_records=0,
+            general_records=0,
+        )
+    purge_expired_trash()
     with get_db() as conn:
         total_records = conn.execute("SELECT COUNT(*) FROM records WHERE user_id = ? AND deleted_at IS NULL", (user_id,)).fetchone()[0]
         purchase_records = conn.execute(
