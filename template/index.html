@@ -717,7 +717,9 @@
             <a href="/records" class="nav-link-custom">Records</a>
             <a href="/about" class="nav-link-custom">About</a>
             <a href="/help" class="nav-link-custom">Help</a>
-            {% if session.get('user_id') %}
+            {% if not authentication_enabled %}
+                <span class="badge bg-success">Demo mode</span>
+            {% elif session.get('user_id') %}
                 <span class="badge bg-success">Logged in: {{ session.get('user_email') }}</span>
                 <a href="/logout" class="btn btn-danger btn-sm">Logout</a>
             {% else %}

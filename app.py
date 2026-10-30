@@ -29,6 +29,8 @@ load_dotenv()
 app = Flask(__name__, template_folder="template")
 app.secret_key = os.environ.get("SECRET_KEY", "cpit251-sbs-secret-key-2026")
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
+# Temporarily disabled for testing. Set to True later to restore login and TOTP.
+AUTHENTICATION_ENABLED = False
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() == "true"
@@ -176,10 +178,23 @@ def init_db():
         conn.execute("UPDATE records SET user_id = ? WHERE user_id IS NULL", (user_id,))
 init_db()
 
+@app.context_processor
+def inject_authentication_state():
+    return {"authentication_enabled": AUTHENTICATION_ENABLED}
+
 def current_user_id():
-    return session.get("user_id")
+    if AUTHENTICATION_ENABLED:
+        return session.get("user_id")
+    with get_db() as conn:
+        user = conn.execute(
+            "SELECT id FROM users WHERE email = ?",
+            ("wajid@cydevlab.stream",),
+        ).fetchone()
+    return user["id"] if user else None
 
 def require_login():
+    if not AUTHENTICATION_ENABLED:
+        return None
     if not current_user_id():
         flash("Please log in to access your records.", "warning")
         return redirect(url_for("login", next=request.path))
@@ -467,6 +482,8 @@ def analyze_with_gemini(image_path=None, voice_text=None, image_bytes=None):
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if not AUTHENTICATION_ENABLED:
+        return redirect(url_for("index"))
     if request.method == "POST":
         identifier = request.form.get("identifier", "").strip().lower()
         password = request.form.get("password")
@@ -486,6 +503,8 @@ def login():
 
 @app.route("/2fa/setup", methods=["GET", "POST"])
 def two_factor_setup():
+    if not AUTHENTICATION_ENABLED:
+        return redirect(url_for("index"))
     user_id = session.get("pending_2fa_user_id")
     if not user_id:
         return redirect(url_for("login"))
@@ -521,6 +540,8 @@ def two_factor_setup():
 
 @app.route("/2fa", methods=["GET", "POST"])
 def two_factor():
+    if not AUTHENTICATION_ENABLED:
+        return redirect(url_for("index"))
     user_id = session.get("pending_2fa_user_id")
     if not user_id:
         return redirect(url_for("login"))
