@@ -19,6 +19,7 @@ from google.genai import types
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from PIL import Image
 import pyotp
 import qrcode
 
@@ -374,7 +375,25 @@ def analyze_with_gemini(image_path=None, voice_text=None):
         if image_path and os.path.exists(image_path):
             with open(image_path, "rb") as f:
                 img_bytes = f.read()
-            mime = "image/png" if image_path.endswith(".png") else "image/jpeg"
+            try:
+                image = Image.open(io.BytesIO(img_bytes))
+                image.load()
+                if image.mode not in ("RGB", "L"):
+                    image = image.convert("RGB")
+                normalized = io.BytesIO()
+                image.save(normalized, format="JPEG", quality=92, optimize=True)
+                img_bytes = normalized.getvalue()
+                mime = "image/jpeg"
+            except (OSError, ValueError):
+                extension = os.path.splitext(image_path)[1].lower()
+                mime = {
+                    ".png": "image/png",
+                    ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                    ".webp": "image/webp",
+                }.get(extension)
+                if not mime:
+                    raise ValueError("Unsupported or unreadable image format")
             contents.append(types.Part.from_bytes(data=img_bytes, mime_type=mime))
         if voice_text:
             contents.append(f"Input Text/Voice Transcript: {voice_text}")
