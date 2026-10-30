@@ -754,7 +754,8 @@
                 </div>
                 <button type="submit" class="btn btn-primary w-100">Log in securely</button>
             </form>
-            <p class="small text-muted mt-3 mb-0">New here? <a href="/register">Create an account</a>.</p>
+            <p class="small text-muted mt-3 mb-1">New here? <a href="/register">Create an account</a>.</p>
+            <a class="small text-decoration-none" href="/forgot-password">Forgot your password?</a>
         </div>
     </div>
 
@@ -780,6 +781,55 @@
                 <button type="submit" class="btn btn-primary w-100">Create account</button>
             </form>
             <p class="small text-muted mt-3 mb-0">Already registered? <a href="/login">Log in</a>.</p>
+        </div>
+    </div>
+
+    {% elif page == 'verify' %}
+    <div class="card mx-auto shadow-sm" style="max-width: 460px;">
+        <div class="card-body p-4">
+            <h1 class="h4 mb-2">Verify your email</h1>
+            <p class="text-muted small">Enter the six-digit code sent to <strong>{{ email }}</strong>.</p>
+            <form method="POST" action="/verify">
+                <input type="hidden" name="email" value="{{ email }}">
+                <div class="mb-3">
+                    <label class="form-label">Verification code</label>
+                    <input type="text" name="code" class="form-control text-center" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Verify email</button>
+            </form>
+        </div>
+    </div>
+
+    {% elif page == 'forgot' %}
+    <div class="card mx-auto shadow-sm" style="max-width: 460px;">
+        <div class="card-body p-4">
+            <h1 class="h4 mb-2">Forgot password?</h1>
+            <p class="text-muted small">Enter your email and we will send a secure reset link.</p>
+            <form method="POST" action="/forgot-password">
+                <div class="mb-3">
+                    <label class="form-label">Email address</label>
+                    <input type="email" name="email" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Send reset link</button>
+            </form>
+        </div>
+    </div>
+
+    {% elif page == 'reset' %}
+    <div class="card mx-auto shadow-sm" style="max-width: 460px;">
+        <div class="card-body p-4">
+            <h1 class="h4 mb-2">Create a new password</h1>
+            <form method="POST" action="{{ url_for('reset_password', token=token) }}">
+                <div class="mb-3">
+                    <label class="form-label">New password</label>
+                    <input type="password" name="password" class="form-control" minlength="8" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Confirm new password</label>
+                    <input type="password" name="confirm_password" class="form-control" minlength="8" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Reset password</button>
+            </form>
         </div>
     </div>
 
@@ -1099,7 +1149,7 @@
             <div class="card p-4 mb-4">
                 <h2 class="h5 fw-bold">Need more help?</h2>
                 <p class="text-muted">For project support, contact the SBS team and include the record number and a short description of the issue.</p>
-                <a class="btn btn-primary" href="mailto:wajid4600w@gmail.com">✉ Email support</a>
+                <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#supportModal">✉ Email support</button>
             </div>
             <div class="card p-4">
                 <h2 class="h5 fw-bold">Helpful shortcuts</h2>
@@ -1119,7 +1169,7 @@
             <div class="card p-4 mt-4 border-primary">
                 <h2 class="h5 fw-bold">Need technical support?</h2>
                 <p class="text-muted small mb-2">When reporting an issue, include the page name, record number if available, browser, and the action that failed.</p>
-                <a class="small text-decoration-none" href="mailto:wajid4600w@gmail.com">wajid4600w@gmail.com</a>
+                <button class="btn btn-link btn-sm p-0 text-decoration-none" type="button" data-bs-toggle="modal" data-bs-target="#supportModal">Contact Wajid</button>
             </div>
         </div>
     </div>
@@ -1233,6 +1283,31 @@
     </div>
     {% endif %}
 </main>
+
+<div class="modal fade" id="supportModal" tabindex="-1" aria-labelledby="supportModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-primary text-white">
+                <h2 class="modal-title h5" id="supportModalLabel">SBS Smart Capture Support</h2>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="metric-icon"><i data-lucide="user-round"></i></div>
+                    <div>
+                        <div class="fw-bold">Wajid</div>
+                        <a href="mailto:wajid4600w@gmail.com">wajid4600w@gmail.com</a>
+                    </div>
+                </div>
+                <p class="text-muted small mt-3 mb-0">Include the page name, record number, and a short description of the issue when requesting help.</p>
+            </div>
+            <div class="modal-footer">
+                <a class="btn btn-primary" href="mailto:wajid4600w@gmail.com">Open email</a>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <footer class="container pb-4 pt-3">
     <div class="border-top pt-3 d-flex flex-wrap justify-content-between gap-2 text-muted small">

@@ -11,6 +11,8 @@ services:
         generateValue: true
       - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
       - key: MAIL_SERVER
         value: smtp.gmail.com
       - key: MAIL_PORT

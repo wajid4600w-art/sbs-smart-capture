@@ -3,8 +3,11 @@ import json
 import csv
 import io
 import re
+import secrets
+import smtplib
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -51,7 +54,12 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                is_verified INTEGER NOT NULL DEFAULT 0,
+                verification_code_hash TEXT,
+                verification_expires_at TEXT,
+                reset_token_hash TEXT,
+                reset_expires_at TEXT
             )
         """)
         conn.execute("""
@@ -78,10 +86,20 @@ def init_db():
             conn.execute("ALTER TABLE records ADD COLUMN audio_filename TEXT")
         if "deleted_at" not in columns:
             conn.execute("ALTER TABLE records ADD COLUMN deleted_at TEXT")
+        user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        for column, definition in (
+            ("is_verified", "INTEGER NOT NULL DEFAULT 0"),
+            ("verification_code_hash", "TEXT"),
+            ("verification_expires_at", "TEXT"),
+            ("reset_token_hash", "TEXT"),
+            ("reset_expires_at", "TEXT"),
+        ):
+            if column not in user_columns:
+                conn.execute(f"ALTER TABLE users ADD COLUMN {column} {definition}")
         user = conn.execute("SELECT id FROM users WHERE email = ?", ("wajid@cydevlab.stream",)).fetchone()
         if not user:
             cur = conn.execute(
-                "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
+                "INSERT INTO users (email, password_hash, created_at, is_verified) VALUES (?, ?, ?, 1)",
                 ("wajid@cydevlab.stream", generate_password_hash("kau2026"),
                  datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             )
@@ -102,6 +120,35 @@ def require_login():
         flash("Please log in to access your records.", "warning")
         return redirect(url_for("login", next=request.path))
     return None
+
+def utc_now():
+    return datetime.now(timezone.utc)
+
+def send_email(to_address, subject, body):
+    host = os.environ.get("MAIL_SERVER", "smtp.gmail.com")
+    port = int(os.environ.get("MAIL_PORT", "587"))
+    username = os.environ.get("MAIL_USERNAME", "")
+    password = os.environ.get("MAIL_PASSWORD", "")
+    if not username or not password:
+        app.logger.warning("Email delivery is not configured; cannot send to %s", to_address)
+        return False
+    message = EmailMessage()
+    message["From"] = username
+    message["To"] = to_address
+    message["Subject"] = subject
+    message.set_content(body)
+    try:
+        with smtplib.SMTP(host, port, timeout=20) as smtp:
+            smtp.starttls()
+            smtp.login(username, password)
+            smtp.send_message(message)
+        return True
+    except (OSError, smtplib.SMTPException) as exc:
+        app.logger.warning("Email delivery failed: %s", exc)
+        return False
+
+def app_url(path):
+    return f"{request.host_url.rstrip('/')}{path}"
 
 def purge_expired_trash():
     cutoff = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
@@ -316,12 +363,26 @@ def analyze_with_gemini(image_path=None, voice_text=None):
         if voice_text:
             contents.append(f"Input Text/Voice Transcript: {voice_text}")
 
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=contents,
-            config=types.GenerateContentConfig(response_mime_type="application/json")
-        )
-        return json.loads(response.text)
+        model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+        for attempt in range(2):
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=contents,
+                    config=types.GenerateContentConfig(response_mime_type="application/json")
+                )
+                text = response.text.strip()
+                if text.startswith("```"):
+                    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE | re.DOTALL).strip()
+                parsed = json.loads(text)
+                required = {"record_type", "name", "shop", "doc_date", "items", "total_amount", "plain_text"}
+                if not required.issubset(parsed):
+                    raise ValueError("Gemini response omitted required record fields")
+                return parsed
+            except Exception:
+                if attempt == 1:
+                    raise
+        raise RuntimeError("Gemini extraction did not return a result")
     except Exception as e:
         app.logger.warning("Gemini extraction unavailable: %s", e)
         return {
@@ -345,6 +406,9 @@ def login():
         with get_db() as conn:
             user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
         if user and check_password_hash(user["password_hash"], password):
+            if not user["is_verified"]:
+                flash("Verify your email before logging in.", "warning")
+                return redirect(url_for("verify_email", email=user["email"]))
             session.clear()
             session["user_id"] = user["id"]
             session["user_email"] = user["email"]
@@ -366,17 +430,100 @@ def register():
             flash("Passwords do not match.", "danger")
         else:
             try:
+                code = f"{secrets.randbelow(1000000):06d}"
+                expires = (utc_now() + timedelta(minutes=15)).isoformat()
                 with get_db() as conn:
                     conn.execute(
-                        "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
+                        """INSERT INTO users
+                        (email, password_hash, created_at, is_verified, verification_code_hash, verification_expires_at)
+                        VALUES (?, ?, ?, 0, ?, ?)""",
                         (email, generate_password_hash(password),
-                         datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                         generate_password_hash(code), expires),
                     )
-                flash("Account created. You can now log in.", "success")
-                return redirect(url_for("login"))
+                sent = send_email(
+                    email,
+                    "SBS Smart Capture verification code",
+                    f"Your SBS Smart Capture verification code is {code}.\n\nIt expires in 15 minutes.",
+                )
+                if sent:
+                    flash("Account created. Check your email for the verification code.", "success")
+                else:
+                    flash("Account created, but verification email could not be sent. Configure Gmail SMTP in Render.", "warning")
+                return redirect(url_for("verify_email", email=email))
             except sqlite3.IntegrityError:
                 flash("An account with that email already exists.", "warning")
     return render_template("index.html", page="register")
+
+@app.route("/verify", methods=["GET", "POST"])
+def verify_email():
+    email = request.values.get("email", "").strip().lower()
+    if request.method == "POST":
+        code = request.form.get("code", "").strip()
+        with get_db() as conn:
+            user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+            valid = user and user["verification_expires_at"] and datetime.fromisoformat(user["verification_expires_at"]) > utc_now()
+            if valid and check_password_hash(user["verification_code_hash"], code):
+                conn.execute(
+                    "UPDATE users SET is_verified=1, verification_code_hash=NULL, verification_expires_at=NULL WHERE id=?",
+                    (user["id"],),
+                )
+                flash("Email verified. You can now log in.", "success")
+                return redirect(url_for("login"))
+        flash("That verification code is invalid or expired.", "danger")
+    return render_template("index.html", page="verify", email=email)
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        token = secrets.token_urlsafe(32)
+        expires = (utc_now() + timedelta(minutes=30)).isoformat()
+        with get_db() as conn:
+            user = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+            if user:
+                conn.execute(
+                    "UPDATE users SET reset_token_hash=?, reset_expires_at=? WHERE id=?",
+                    (generate_password_hash(token), expires, user["id"]),
+                )
+        if user:
+            send_email(
+                email,
+                "Reset your SBS Smart Capture password",
+                f"Open this link within 30 minutes to reset your password:\n\n{app_url(url_for('reset_password', token=token))}",
+            )
+        flash("If that email is registered, a password-reset link has been sent.", "info")
+        return redirect(url_for("login"))
+    return render_template("index.html", page="forgot")
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    with get_db() as conn:
+        user = conn.execute("SELECT * FROM users WHERE reset_token_hash IS NOT NULL").fetchall()
+    matched = next(
+        (candidate for candidate in user
+         if candidate["reset_expires_at"]
+         and datetime.fromisoformat(candidate["reset_expires_at"]) > utc_now()
+         and check_password_hash(candidate["reset_token_hash"], token)),
+        None,
+    )
+    if not matched:
+        flash("This password-reset link is invalid or expired.", "danger")
+        return redirect(url_for("forgot_password"))
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm_password", "")
+        if len(password) < 8 or password != confirm:
+            flash("Use at least 8 characters and make both passwords match.", "danger")
+        else:
+            with get_db() as conn:
+                conn.execute(
+                    "UPDATE users SET password_hash=?, reset_token_hash=NULL, reset_expires_at=NULL, is_verified=1 WHERE id=?",
+                    (generate_password_hash(password), matched["id"]),
+                )
+            flash("Password reset successfully. You can now log in.", "success")
+            return redirect(url_for("login"))
+    return render_template("index.html", page="reset", token=token)
 
 @app.route("/logout")
 def logout():
