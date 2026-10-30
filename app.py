@@ -363,7 +363,7 @@ def analyze_with_gemini(image_path=None, voice_text=None):
         if voice_text:
             contents.append(f"Input Text/Voice Transcript: {voice_text}")
 
-        model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+        model = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
         for attempt in range(2):
             try:
                 response = client.models.generate_content(
