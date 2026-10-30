@@ -28,7 +28,7 @@ load_dotenv()
 
 app = Flask(__name__, template_folder="template")
 app.secret_key = os.environ.get("SECRET_KEY", "cpit251-sbs-secret-key-2026")
-app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 # Temporarily disabled for testing. Set to True later to restore login and TOTP.
 AUTHENTICATION_ENABLED = False
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -37,7 +37,7 @@ app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "t
 
 @app.errorhandler(413)
 def request_entity_too_large(error):
-    flash("The upload is too large. Images and audio files must be 20 MB or smaller.", "danger")
+    flash("The upload is too large. Images and audio files must be 8 MB or smaller.", "danger")
     return redirect(url_for("index"))
 
 # Folders for storing uploaded images and structured .txt files
@@ -49,8 +49,8 @@ os.makedirs(TXT_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "txt", "mp3", "wav", "m4a", "webm", "ogg"}
 IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 AUDIO_EXTENSIONS = {"mp3", "wav", "m4a", "webm", "ogg"}
-MAX_GEMINI_IMAGE_BYTES = 14 * 1024 * 1024
-MAX_IMAGE_PIXELS = 8_000_000
+MAX_GEMINI_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_IMAGE_PIXELS = 4_000_000
 
 # Default Admin User (Hashed password for Rubric Section 2c Security)
 ADMIN_USER = "wajid"
@@ -67,8 +67,8 @@ def normalize_image_for_gemini(image_bytes):
     """Validate an image and return compact JPEG bytes with a matching MIME type."""
     if not image_bytes:
         raise ValueError("The uploaded image is empty.")
-    if len(image_bytes) > MAX_GEMINI_IMAGE_BYTES * 2:
-        raise ValueError("The uploaded image is too large. Please use an image under 28 MB.")
+    if len(image_bytes) > MAX_GEMINI_IMAGE_BYTES:
+        raise ValueError("The uploaded image is too large. Please use an image under 8 MB.")
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", Image.DecompressionBombWarning)
@@ -88,7 +88,7 @@ def normalize_image_for_gemini(image_bytes):
     if image.mode not in ("RGB", "L"):
         image = image.convert("RGB")
 
-    for quality in (90, 78, 65, 50):
+    for quality in (82, 68, 52):
         output = io.BytesIO()
         image.save(output, format="JPEG", quality=quality, optimize=True)
         normalized = output.getvalue()
@@ -907,21 +907,28 @@ def add_record():
         if audio_duration > 300:
             flash("Audio recordings must be five minutes or shorter.", "danger")
             return redirect(url_for("index"))
-        if audio_file.content_length and audio_file.content_length > 20 * 1024 * 1024:
-            flash("Audio files must be 20 MB or smaller.", "danger")
+        if audio_file.content_length and audio_file.content_length > 8 * 1024 * 1024:
+            flash("Audio files must be 8 MB or smaller.", "danger")
             return redirect(url_for("index"))
         audio_filename = secure_filename(f"audio_{int(datetime.now().timestamp())}.{audio_ext}")
         audio_file.save(os.path.join(UPLOAD_FOLDER, audio_filename))
 
-    extracted = analyze_with_gemini(
-        image_path=img_path,
-        image_bytes=normalized_image,
-        voice_text=voice_text,
-    )
-    if audio_filename and not img_filename:
-        extracted["record_type"] = requested_type or "Audio"
-        if not voice_text:
-            extracted["plain_text"] = "Audio note attached to this record."
+    if not img_filename:
+        extracted = {
+            "record_type": requested_type or ("Audio" if audio_filename else "Voice Record"),
+            "name": requested_name or uploaded_name or "Voice Note",
+            "shop": "N/A",
+            "doc_date": datetime.now().strftime("%Y-%m-%d"),
+            "items": "N/A",
+            "total_amount": "N/A",
+            "plain_text": voice_text or "Audio note attached to this record.",
+        }
+    else:
+        extracted = analyze_with_gemini(
+            image_path=img_path,
+            image_bytes=normalized_image,
+            voice_text=voice_text,
+        )
     record_name = requested_name or uploaded_name or extracted.get("name", "Untitled")
     extracted["name"] = record_name
     raw_txt = format_structured_txt(extracted)
